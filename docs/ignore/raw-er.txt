@@ -1,0 +1,51 @@
+user {
+  email: string; // Unique Primary User Email, must be unique globally
+  is_verified : boolean;
+  verified_at : timestamp;
+  password_hash: string; // Server authentication hash (Argon2/bcrypt)
+  crypto_salt: string; // Base64 encoded public salt used for client-side Master Key KDF
+  two_factor_enabled: boolean; // 2FA global status toggle
+  created_at: timestamp;
+  updated_at: timestamp;
+  last_login_at: timestamp;		// updated each time user logs in to the app
+  
+  projects: Array<{
+  	name, url [optional], note [optional]
+  }>;
+  
+}
+
+env-file {
+	project_id: referenced from project
+	label: string;  // user friendly name like '.env.local'
+  tag: 'Local' | 'Staging' | 'Production' | 'Custom';
+  encrypted_dotenvx_key: string; // Encrypted with the Client's Master Key
+  path: string; // Path to the env file in cloudinary
+}
+
+creds {
+  name: string;
+  url?: string; // Optional URL associated with the credential
+  username: string; // Encrypted with Client's Master Key
+  password: string; // Encrypted with Client's Master Key
+  notes?: string; // Optional notes about the credential
+}
+
+
+api-keys {
+  label: string;
+  url?: string; // Optional URL associated with the API key
+  key: string; // Encrypted with Client's Master Key
+  notes?: string; // Optional notes about the API key
+}
+
+platform {
+  user_id: ObjectId;  // Referenced from user
+  name: string;
+  note?: string; // Optional notes about the platform
+  backup_codes: Array<{
+    encrypted_code: string; // Encrypted with Client's Master Key
+    is_used: boolean; // Default is false
+    used_at: timestamp; // Updated when the backup code is marked as used by the user
+  }>;
+}
