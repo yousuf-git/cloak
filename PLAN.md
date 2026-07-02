@@ -27,6 +27,31 @@ Non-negotiable principles (from PRD Core Philosophy):
 - **Volatile plaintext:** decrypted values, clipboard buffers, and dotenvx private keys live only
   in transient memory and are never written to disk or logs.
 
+### 1.1 UI/UX Expectations (design contract)
+
+The desktop experience is a first-class requirement, not a wrapper around a web page.
+
+- **Framed, centered window.** Launches centered on the primary display in a fixed rectangular
+  frame with sensible min/default sizes; not maximized, not full-bleed. Window is resizable within
+  bounds.
+- **Responsive & adaptive.** Layout adapts fluidly across the allowed window sizes (panels collapse,
+  grids reflow); usable from the minimum size upward.
+- **Clean & modern.** Restrained, confident visual language — clear hierarchy, generous spacing,
+  consistent iconography (Lucide), a deliberate type scale, and light/dark themes.
+- **Native desktop feel, not "web".** No browser chrome cues, no page-scroll jank, no link-blue
+  defaults. Use app-shell layout (sidebar + content), custom/native-styled titlebar,
+  desktop-grade context menus, keyboard shortcuts, and OS-appropriate motion. Content areas scroll
+  internally, the shell stays put.
+- **Crafted moments.** An animated loading/splash screen, a clean multi-step onboarding, and clear
+  inline instructions/empty-states everywhere. Motion is purposeful (Framer Motion for UI
+  transitions; GSAP reserved for splash/onboarding set-pieces) and respects `prefers-reduced-motion`.
+- **Professional polish bar.** Every screen has considered loading, empty, error, and success
+  states; focus-visible rings; full keyboard operability; and no layout shift on data load.
+
+These expectations are threaded through Phase 0 (window config + app shell + design tokens),
+Phase 2 (onboarding/login motion), and Phase 6 (polish pass), and are a gating part of each phase's
+acceptance criteria.
+
 ---
 
 ## 2. Locked Decisions
@@ -89,7 +114,6 @@ default; flag any you want changed.
 cloak/
 ├─ package.json                 # pnpm workspace root, shared scripts
 ├─ pnpm-workspace.yaml
-├─ docker-compose.yml           # local MongoDB (+ optional mongo-express)
 ├─ .env.example                 # non-secret config template (see below)
 ├─ docs/                        # existing PRD + sketches (source of truth)
 ├─ api/                         # Node.js / Express gateway (MVC)
@@ -280,7 +304,7 @@ Each phase ends with a demoable, testable increment. Acceptance criteria are the
   hierarchy + `asyncHandler` + global error handler, response envelope, `helmet`/`cors`/tiered
   rate-limiters, and `/health` + `/ready`.
 - Scaffold `desktop/` (Tauri + React 19 + Vite + Tailwind v4 + shadcn).
-- `docker-compose.yml` for local MongoDB; `.env.example`; Mongoose connection wired into `/ready`.
+- `.env.example`; Mongoose connection wired into `/ready` against the system MongoDB instance.
 - CI skeleton (lint + typecheck + build for all three targets).
 - **Done when:** `pnpm dev` boots the Tauri shell; API `/health` returns 200 and `/ready` returns
   200 against local Mongo (503 when Mongo is down); an intentionally-thrown route returns the
@@ -296,36 +320,67 @@ Each phase ends with a demoable, testable increment. Acceptance criteria are the
 - **Done when:** unit tests prove encrypt→decrypt round-trips and dotenvx interop; keys never
   serialize to disk.
 
-### Phase 2 — Auth & Session (end-to-end)
-- API: signup/prelogin/login/refresh/logout controllers + Zod validators + services, server-side
-  hashing, JWT `requireAuth` guard (explicit public-route Set), email verification, `authLimiter`
-  (5/15min), and audit-log entries for auth events.
-- Resend integration (graceful-degrade when unconfigured) for verification + OTP; 2FA
-  enable/disable + `POST /auth/2fa`.
-- Desktop: onboarding + login/2FA screens (RHF + Zod), client-side KDF via Rust, token storage,
-  TanStack Query auth flows.
-- 30-day Remember-Me via OS secure storage (`keyring`), boot-time ledger check + purge.
+### Phase 2 — Auth & Session (end-to-end) — ✅ DONE
+- API: signup/prelogin/login/2fa/refresh/logout controllers + Zod validators + services, server-side
+  Argon2id hashing of the client authHash, JWT `requireAuth` guard, email verification, `authLimiter`
+  (5/15min, skipped under test), rotating refresh tokens (hashed, TTL-indexed), and audit-log entries
+  for auth events. `prelogin` returns a deterministic fake salt for unknown emails (enumeration
+  defense).
+- Resend integration (graceful-degrade → logs when unconfigured) for verification + OTP; 2FA
+  enable/disable via `POST /me/2fa` and challenge completion via `POST /auth/2fa`.
+- Desktop: brand/onboarding + login/2FA/verify screens (RHF + Zod, segmented OTP input, password
+  strength meter), client-side KDF via Rust (`derive_auth_hash` + `unlock_session`), in-memory token
+  store with transparent 401→refresh, zustand auth/session store driving an `AuthScreen`↔`AppShell`
+  gate.
+- 30-day Remember-Me via OS secret-service (`keyring` v3, pure-Rust D-Bus backend): DEK + refresh
+  token persisted in the keychain (DEK never crosses the webview), boot-time restore with 30-day
+  window check + auto-purge; graceful fallback to login when no Secret Service is available.
+- **Verified:** 13 Supertest integration tests (full signup→verify→login→2FA→refresh→logout),
+  6 Rust unit tests, clean typechecks, and a green desktop production build.
+- **Deferred:** login does not yet hard-block unverified accounts (UI enforces the verify step);
+  ESLint config was not part of Phase 0 scaffolding and remains a follow-up.
 - **Done when:** a user can sign up, verify, log in with OTP, stay logged in ≤30 days, and the
-  server only ever sees hashes/ciphertext.
+  server only ever sees hashes/ciphertext. ✅
 
-### Phase 3 — Vault CRUD + Secure Display
-- Backend + desktop CRUD for `creds`, `api-keys`, `platforms` (backup codes), and `projects`.
-- Masked-by-default tiles; per-field Reveal + Copy (clipboard without visual reveal); backup-code
-  "mark as used" toggle updating `is_used`/`used_at`.
-- Instant client-side search over unencrypted metadata only.
-- **Done when:** all four secret categories are creatable/editable/deletable, always masked until
-  explicit reveal, and searchable without bulk decryption.
+### Phase 3 — Vault CRUD + Secure Display — ✅ DONE
+- **API:** `/vault/{creds,api-keys,platforms,projects}` CRUD (user-scoped, opaque ciphertext),
+  backup-code sub-resource (`/platforms/:id/codes` add + `is_used` toggle), embedded projects on the
+  user; `GET /me` profile; Supertest coverage (ownership, validation). Test files serialized
+  (`fileParallelism: false`) since integration suites share one Mongo.
+- **Desktop:** unified `useCreds/useApiKeys/usePlatforms/useProjects` hooks that branch between
+  **real** (TanStack Query + Rust field crypto) and **Sandbox** (in-memory store). `SecretField`
+  now decrypts on demand via the Rust core; create/edit modals encrypt before save; empty states
+  with CTAs for new users. Backup codes are **encrypted-by-default** with per-code reveal/copy +
+  mark-used. Settings reflect real DB state (functional 2FA toggle → `POST /me/2fa`, Remember-Me
+  status via `remember_status`, working theme switch).
 
-### Phase 4 — Environment Files & dotenvx Workflow
-- Project → env-file list (sketch: 1 tile/project, n env files each; detail view with edit/delete
-  per row, `+` to add).
-- Import flow: choose plaintext vs pre-encrypted; validation UX using `dotenv-parse` + `envalid`
-  (show errors, **Skip** option, and on skip store only the valid subset — per validation sketch).
-- Native ECIES encryption of values; upload encrypted blob to Cloudinary; store path +
-  wrapped dotenvx key in Mongo.
-- Env detail panel with per-value Reveal/Copy and top-level **Reveal All** batch decrypt.
-- **Done when:** a plaintext `.env` imports through the validation UX, encrypts, syncs to
-  Cloudinary/Mongo, and round-trips back to plaintext on Reveal All.
+### Recovery Key + Email (zero-knowledge account recovery) — ✅ DONE
+- Signup now generates a one-time **recovery key** (Crockford base32); the DEK is wrapped by both
+  the MasterKey and a recovery-key-derived key (`recovery_wrappedDEK`). Shown once post-signup.
+- `/auth/recovery/{start,verify,reset}`: email OTP proves identity → returns salt + recovery
+  envelope + short-lived recovery token → client unwraps DEK with the recovery key, sets a new
+  master password, re-wraps both envelopes, and the server rotates credentials + revokes sessions.
+- Rust: `crypto_recovery_reset`; desktop: forgot-password screens; scary "vault is gone" copy
+  replaced with recovery-key guidance.
+
+### Sandbox mode — ✅ DONE
+- Auth screen "Explore a sandbox" button → `useAppMode` renders the full shell backed by dummy data
+  with no API/crypto calls; titlebar shows a Sandbox badge + Exit. Real login remains fully API-wired.
+
+### Phase 4 — Environment Files & dotenvx Workflow — ✅ DONE (core)
+- **API:** `/vault/env-files` CRUD backed by **Cloudinary** (raw resource upload/overwrite/destroy,
+  proxied `GET /:id/raw` for authorized fetch). Metadata in Mongo: `label`, `tag`,
+  `encrypted_dotenvx_key` (nullable = view-only), `path`, `url`, `variable_count`.
+- **Rust:** whole-file dotenvx crypto — `crypto_env_encrypt_new` (generate keypair, encrypt file,
+  wrap private key with the **DEK** so Remember-Me restore can still decrypt), `crypto_env_decrypt`,
+  `crypto_env_encrypt_existing` (edit re-encrypt under the file's public key), `crypto_env_wrap_key`
+  (encrypted import with a supplied key), `crypto_env_count_variables`.
+- **Import flow:** plaintext (auto keygen + encrypt + wrap) vs already-encrypted (optional key with
+  safety messaging; blank ⇒ `encrypted_dotenvx_key: null`, view-only).
+- **View editor:** replaces "Reveal All" — read-only raw (from Cloudinary) → **Decrypt** →
+  **Edit** (tracks changes, re-encrypts + saves) → **Delete** (confirm → Cloudinary + Mongo). Decrypt
+  disabled with an explanatory note when no key is stored.
+- **Deferred:** `dotenv-parse`/`envalid` validation UX with per-line Skip (planned for import polish).
 
 ### Phase 5 — Import / Export
 - Google Password Manager CSV import → map `name,url,username,password,note` → encrypted `creds`
@@ -347,7 +402,7 @@ Each phase ends with a demoable, testable increment. Acceptance criteria are the
   secrets or dotenvx keys on disk or in logs; `zeroize` on all transient plaintext; search limited
   to unencrypted metadata.
 - **Testing:** Rust unit tests (crypto, interop); API integration tests via **Supertest importing
-  `app.ts` directly** (no `listen`) against Dockerized Mongo, with faker-based factories; frontend
+  `app.ts` directly** (no `listen`) against the system MongoDB instance, with faker-based factories; frontend
   component tests (Vitest + Testing Library); Phase-6 E2E. Cover happy path + validation failure +
   auth failure per endpoint.
 - **Config/secrets:** single **Zod-validated, typed `config`** object built at boot (crash-early on
