@@ -1,0 +1,131 @@
+@import "tailwindcss";
+
+/* Class-based dark mode (html.dark). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ---- Design tokens ---------------------------------------------------- */
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --font-display: "Space Grotesk", "Inter", ui-sans-serif, system-ui, sans-serif;
+
+  --radius-lg: 0.85rem;
+  --radius-xl: 1.15rem;
+
+  /* Accent */
+  --color-brand-50: #eef2ff;
+  --color-brand-100: #e0e7ff;
+  --color-brand-400: #818cf8;
+  --color-brand-500: #6366f1;
+  --color-brand-600: #4f46e5;
+  --color-brand-700: #4338ca;
+
+  /* Semantic surfaces (light) */
+  --color-bg: #f6f7f9;
+  --color-surface: #ffffff;
+  --color-surface-2: #f1f2f4;
+  --color-border: #e4e6ea;
+  --color-fg: #14161a;
+  --color-fg-muted: #5b616e;
+}
+
+/* Dark theme overrides */
+:where(.dark) {
+  --color-bg: #0b0d12;
+  --color-surface: #14171e;
+  --color-surface-2: #1b1f28;
+  --color-border: #262b36;
+  --color-fg: #eceef2;
+  --color-fg-muted: #9aa2b1;
+}
+
+/* ---- Base ------------------------------------------------------------- */
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  /* Native controls (inputs, scrollbars, autofill) follow the app theme,
+     not the OS — fixes system-styled selects/inputs in light & dark. */
+  html {
+    color-scheme: light;
+  }
+  html.dark {
+    color-scheme: dark;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  h1,
+  h2,
+  h3,
+  .font-display {
+    font-family: var(--font-display);
+    letter-spacing: -0.015em;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--color-bg);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    /* Desktop feel: no rubber-band, no accidental text selection on chrome. */
+    overscroll-behavior: none;
+    user-select: none;
+  }
+
+  /* Content that should still be selectable/typable. */
+  input,
+  textarea,
+  [data-selectable="true"] {
+    user-select: text;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-brand-500);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  /* Slim, modern scrollbars for internal scroll regions. */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--color-fg-muted) 35%, transparent);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in srgb, var(--color-fg-muted) 55%, transparent);
+    background-clip: padding-box;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+/* Region used for dragging a custom (frameless-style) titlebar. */
+.drag-region {
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+.no-drag {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
