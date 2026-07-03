@@ -53,28 +53,85 @@ Cloak keeps the convenience of a synced vault while guaranteeing the server — 
 
 Cloak splits responsibilities between an on-device Rust core (all cryptography) and a thin cloud API (opaque storage + auth orchestration).
 
-```
-        ┌─────────────────────────────── Desktop App (Tauri) ───────────────────────────────┐
-        │                                                                                    │
-        │   React + TypeScript UI  ──invoke──►  Rust core (Argon2id · XChaCha20 · dotenvx)    │
-        │        │  masked secrets, reveal on demand        │  Vault DEK in volatile memory   │
-        └────────┼───────────────────────────────────────────┼───────────────────────────────┘
-                 │ HTTPS (only ciphertext + auth hashes)      │ OS secure store (Remember-Me)
-                 ▼                                            (Keychain / Cred Mgr / Secret Service)
-        ┌──────────────────────────── Cloud API (Node · Express) ────────────────────────────┐
-        │   Verifies auth hash · issues JWTs · rate limits · never decrypts payloads           │
-        │                              MongoDB Atlas (opaque blobs)                            │
-        └──────────────────────────────────────────────────────────────────────────────────┘
+### Desktop App Architecture
+
+```mermaid
+flowchart TB
+    subgraph Desktop["Desktop App (Tauri)"]
+        UI["React + TypeScript UI"]
+        Rust["Rust Core<br/>Argon2id · XChaCha20 · dotenvx"]
+        Memory["Vault DEK<br/>in volatile memory"]
+
+        UI -->|"invoke"| Rust
+        UI -.->|"masked secrets,<br/>reveal on demand"| Rust
+        Rust --- Memory
+    end
+
+    subgraph Cloud["Cloud API (Node · Express)"]
+        API["Verifies auth hash · issues JWTs<br/>rate limits · never decrypts payloads"]
+        MongoDB["MongoDB Atlas<br/>opaque blobs"]
+        API --> MongoDB
+    end
+
+    Desktop -->|"HTTPS<br/>(only ciphertext + auth hashes)"| Cloud
+    Desktop -.->|"OS secure store (Remember-Me)<br/>Keychain / Cred Mgr / Secret Service"| Cloud
+
+    classDef desktop fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,color:#000000,font-weight:bold
+    classDef cloud fill:#e3f2fd,stroke:#0d47a1,stroke-width:2px,color:#000000,font-weight:bold
+    classDef component fill:#ffffff,stroke:#424242,stroke-width:2px,color:#000000,font-weight:bold
+
+    linkStyle 0 stroke:#d32f2f,stroke-width:3px,color:#d32f2f
+    linkStyle 1 stroke:#1976d2,stroke-width:2px,stroke-dasharray:5,color:#1976d2
+    linkStyle 2 stroke:#424242,stroke-width:2px,color:#424242
+    linkStyle 3 stroke:#2e7d32,stroke-width:3px,color:#2e7d32
+    linkStyle 4 stroke:#e65100,stroke-width:2px,stroke-dasharray:5,color:#e65100
+
+    class Desktop desktop
+    class Cloud cloud
+    class UI,Rust,Memory,API,MongoDB component
 ```
 
-**Environment file encryption (dotenvx)** — values are encrypted individually, and the private key that unlocks them is itself sealed with your master key:
+### Dotenvx Encryption Process
 
-```
-[ Plaintext .env value ] ──► encrypted via dotenvx ──► [ Wrapped value block ]
-                                       │
-[ Raw dotenvx private key ] ──► sealed with Master Key ──► [ Encrypted key token ]
-                                       │
-                    Both the encrypted blob and the sealed key are stored server-side.
+Values are encrypted individually, and the private key that unlocks them is itself sealed with your master key. Both the encrypted blob and the sealed key are stored server-side.
+
+```mermaid
+flowchart LR
+    subgraph Client["🖥️ Client"]
+        A["📄 Plaintext .env value"]
+        B["🔑 Raw dotenvx private key"]
+    end
+
+    subgraph Process["⚙️ Encryption"]
+        C["dotenvx encrypt"]
+        D["🔒 Seal with Master Key"]
+    end
+
+    subgraph Storage["💾 Server Storage"]
+        E["📦 Wrapped value block<br/>(encrypted blob)"]
+        F["🔐 Encrypted key token<br/>(sealed key)"]
+    end
+
+    A -->|"encrypts"| C
+    C -->|"produces"| E
+
+    B -->|"seals"| D
+    D -->|"produces"| F
+
+    E -.->|"stored together"| Combined[("🗄️ Both stored<br/>server-side")]
+    F -.-> Combined
+
+    classDef client fill:#c8e6c9,stroke:#2e7d32,stroke-width:2px,color:#000000
+    classDef process fill:#ffe0b2,stroke:#e65100,stroke-width:2px,color:#000000
+    classDef storage fill:#bbdefb,stroke:#0d47a1,stroke-width:2px,color:#000000
+    classDef combined fill:#e1bee7,stroke:#6a1b9a,stroke-width:2px,color:#000000
+    classDef data fill:#ffffff,stroke:#424242,stroke-width:1px,color:#000000
+
+    class Client client
+    class Process process
+    class Storage storage
+    class Combined combined
+    class A,B,C,D,E,F data
 ```
 
 ## <img src="https://api.iconify.design/lucide/layers.svg?color=%236366f1&height=20" align="center" alt="" /> Tech Stack
