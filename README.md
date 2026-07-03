@@ -56,12 +56,21 @@ Cloak splits responsibilities between an on-device Rust core (all cryptography) 
 ### Desktop App Architecture
 
 ```mermaid
+%%{init: {
+  'theme': 'base',
+  'themeVariables': {
+    'edgeLabelBackground':'#ffffff',
+    'tertiaryTextColor': '#616161',
+    'primaryTextColor': '#616161'
+  }
+}}%%
+
 flowchart TB
     subgraph Desktop["Desktop App (Tauri)"]
         UI["React + TypeScript UI"]
         Rust["Rust Core<br/>Argon2id · XChaCha20 · dotenvx"]
         Memory["Vault DEK<br/>in volatile memory"]
-
+        
         UI -->|"invoke"| Rust
         UI -.->|"masked secrets,<br/>reveal on demand"| Rust
         Rust --- Memory
@@ -79,7 +88,7 @@ flowchart TB
     classDef desktop fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,color:#000000,font-weight:bold
     classDef cloud fill:#e3f2fd,stroke:#0d47a1,stroke-width:2px,color:#000000,font-weight:bold
     classDef component fill:#ffffff,stroke:#424242,stroke-width:2px,color:#000000,font-weight:bold
-
+    
     linkStyle 0 stroke:#d32f2f,stroke-width:3px,color:#d32f2f
     linkStyle 1 stroke:#1976d2,stroke-width:2px,stroke-dasharray:5,color:#1976d2
     linkStyle 2 stroke:#424242,stroke-width:2px,color:#424242
