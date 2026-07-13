@@ -1,0 +1,43 @@
+<svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Cloak logo">
+  <defs>
+    <linearGradient id="clk-bg" x1="16" y1="10" x2="104" y2="110" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2D6A4F"/>
+      <stop offset="0.55" stop-color="#1B4332"/>
+      <stop offset="1" stop-color="#081C15"/>
+    </linearGradient>
+    <radialGradient id="clk-glow" cx="0.5" cy="0.28" r="0.75">
+      <stop offset="0" stop-color="#52B788" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#52B788" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="clk-fg" x1="60" y1="18" x2="60" y2="102" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F4F1EA"/>
+      <stop offset="1" stop-color="#D8E2DC"/>
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="112" height="112" rx="28" fill="url(#clk-bg)"/>
+  <rect x="4" y="4" width="112" height="112" rx="28" fill="url(#clk-glow)"/>
+  <path
+    d="M60 22 L88 44 L78 98 C78 100 76 102 74 102 H46 C44 102 42 100 42 98 L32 44 Z"
+    fill="url(#clk-fg)"
+  />
+  <path
+    d="M60 22 L88 44 L78 98 C78 100 76 102 74 102 H46 C44 102 42 100 42 98 L32 44 Z"
+    fill="none"
+    stroke="#B7C4B8"
+    stroke-opacity="0.35"
+    stroke-width="1.2"
+  />
+  <circle cx="60" cy="58" r="9.5" fill="#1B4332"/>
+  <path
+    d="M54.5 63 H65.5 L62.4 84 C62.4 85.5 61.2 86.5 60 86.5 C58.8 86.5 57.6 85.5 57.6 84 Z"
+    fill="#1B4332"
+  />
+  <path
+    d="M48 96 C48 62 52 40 60 34 C68 40 72 62 72 96"
+    stroke="#95D5B2"
+    stroke-opacity="0.45"
+    stroke-width="2.4"
+    stroke-linecap="round"
+    fill="none"
+  />
+</svg>
