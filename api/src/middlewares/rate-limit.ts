@@ -13,8 +13,17 @@ const base = {
 /** Looser global limiter for authenticated API traffic. */
 export const apiLimiter = rateLimit({ ...base, max: config.RATE_LIMIT_API_MAX });
 
-/** Strict limiter for auth + OTP endpoints (PRD: 5 attempts / 15 min). */
-export const authLimiter = rateLimit({ ...base, max: config.RATE_LIMIT_AUTH_MAX });
+/**
+ * Strict brute-force limiter for secret-guessing endpoints (login, OTP, recovery
+ * code). `skipSuccessfulRequests` means only FAILED attempts count toward the
+ * budget, so a normal user's successful logins never trip it — only repeated
+ * wrong passwords / codes do (PRD: ~N failed attempts / 15 min).
+ */
+export const authLimiter = rateLimit({
+  ...base,
+  max: config.RATE_LIMIT_AUTH_MAX,
+  skipSuccessfulRequests: true,
+});
 
 /** Limiter for file-upload (env-file) endpoints. */
 export const uploadLimiter = rateLimit({ ...base, max: config.RATE_LIMIT_UPLOAD_MAX });
