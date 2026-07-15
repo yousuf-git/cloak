@@ -2,6 +2,7 @@ mod commands;
 mod crypto;
 mod keystore;
 mod session;
+mod sidecar;
 
 use commands::{
   app_version, crypto_decrypt_env_value, crypto_decrypt_field, crypto_derive_auth_hash,
@@ -12,19 +13,30 @@ use commands::{
   remember_enable, remember_status, remember_try_restore,
 };
 use session::CryptoSession;
+use sidecar::ApiProcess;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
     .manage(CryptoSession::default())
+    .manage(ApiProcess::default())
     .setup(|app| {
-      if cfg!(debug_assertions) {
-        app.handle().plugin(
-          tauri_plugin_log::Builder::default()
-            .level(log::LevelFilter::Info)
-            .build(),
-        )?;
+      // Registered in release too: the sidecar only runs there, so its logs
+      // would otherwise go nowhere and a failed startup would be silent.
+      app.handle().plugin(
+        tauri_plugin_log::Builder::default()
+          .level(log::LevelFilter::Info)
+          .build(),
+      )?;
+
+      // Debug builds leave the backend to `pnpm dev:api` — spawning here would
+      // fight it for the port and lose tsx's hot reload.
+      #[cfg(not(debug_assertions))]
+      {
+        use tauri::Manager;
+        sidecar::start(&app.state::<ApiProcess>())?;
       }
+
       Ok(())
     })
     .invoke_handler(tauri::generate_handler![
@@ -51,6 +63,14 @@ pub fn run() {
       remember_clear,
       remember_status,
     ])
-    .run(tauri::generate_context!())
-    .expect("error while running tauri application");
+    .build(tauri::generate_context!())
+    .expect("error while building tauri application")
+    .run(|app, event| {
+      // Last event before the process goes away — reap the backend so closing
+      // the window doesn't leave an orphan holding the port.
+      if let tauri::RunEvent::Exit = event {
+        use tauri::Manager;
+        sidecar::stop(&app.state::<ApiProcess>());
+      }
+    });
 }

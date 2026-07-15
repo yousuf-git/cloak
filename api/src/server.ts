@@ -23,6 +23,18 @@ async function main(): Promise<void> {
 
   process.on('SIGTERM', () => shutdown('SIGTERM'));
   process.on('SIGINT', () => shutdown('SIGINT'));
+
+  // Spawned by the desktop app, which holds our stdin pipe open for exactly this
+  // purpose: EOF means the parent died without getting to send SIGTERM (crash,
+  // SIGKILL), and an orphaned backend would keep the port and the DB connection.
+  //
+  // Exit hard rather than via shutdown(): that path drains live connections and
+  // logs first, but our only client just died and stdout/stderr are now pipes
+  // with no reader — draining and logging there hangs instead of exiting.
+  if (process.env.CLOAK_SIDECAR === '1') {
+    process.stdin.on('end', () => process.exit(0));
+    process.stdin.resume();
+  }
 }
 
 process.on('unhandledRejection', (reason) => {

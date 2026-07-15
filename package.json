@@ -12,6 +12,7 @@
     "dev:desktop": "pnpm --filter @cloak/desktop dev",
     "build:api": "pnpm --filter @cloak/api build",
     "build:desktop": "pnpm --filter @cloak/desktop build",
+    "ship": "bash scripts/ship.sh",
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test"
