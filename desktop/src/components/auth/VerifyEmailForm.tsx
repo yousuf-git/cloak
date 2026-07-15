@@ -11,6 +11,7 @@ import { CodeInput } from './CodeInput';
 export function VerifyEmailForm() {
   const email = useAuth((s) => s.email);
   const verifyEmail = useAuth((s) => s.verifyEmail);
+  const returnToLogin = useAuth((s) => s.returnToLogin);
   const busy = useAuth((s) => s.busy);
   const error = useAuth((s) => s.error);
 
@@ -32,6 +33,7 @@ export function VerifyEmailForm() {
       <AuthHeader
         title="Verify your email"
         subtitle={`We sent a 6-digit code to ${email ?? 'your inbox'}. Enter it to activate your vault.`}
+        onBack={() => returnToLogin()}
       />
 
       <FormError message={error} />

@@ -11,7 +11,7 @@ import { CodeInput } from './CodeInput';
 export function TwoFactorForm() {
   const email = useAuth((s) => s.email);
   const submitTwoFactor = useAuth((s) => s.submitTwoFactor);
-  const logout = useAuth((s) => s.logout);
+  const returnToLogin = useAuth((s) => s.returnToLogin);
   const busy = useAuth((s) => s.busy);
   const error = useAuth((s) => s.error);
 
@@ -33,7 +33,7 @@ export function TwoFactorForm() {
       <AuthHeader
         title="Two-factor verification"
         subtitle={`Enter the 6-digit code we emailed to ${email ?? 'your inbox'} to finish signing in.`}
-        onBack={() => logout()}
+        onBack={() => returnToLogin()}
       />
 
       <FormError message={error} />

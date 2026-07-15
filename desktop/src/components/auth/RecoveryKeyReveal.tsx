@@ -7,6 +7,7 @@ import { AuthHeader } from './AuthScreen';
 export function RecoveryKeyReveal() {
   const recoveryKey = useAuth((s) => s.recoveryKey);
   const acknowledge = useAuth((s) => s.acknowledgeRecoveryKey);
+  const returnToLogin = useAuth((s) => s.returnToLogin);
   const [copied, setCopied] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
 
@@ -32,6 +33,7 @@ export function RecoveryKeyReveal() {
       <AuthHeader
         title="Save your recovery key"
         subtitle="This is the only way to regain access if you forget your master password. We can't show it again."
+        onBack={() => returnToLogin()}
       />
 
       <div

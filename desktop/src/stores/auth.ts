@@ -51,6 +51,8 @@ interface AuthState {
   login: (email: string, password: string, remember: boolean) => Promise<void>;
   submitTwoFactor: (otp: string) => Promise<void>;
   logout: () => Promise<void>;
+  /** Escape any pre-unlock flow (verify / 2FA / recovery) back to the sign-in screen. */
+  returnToLogin: () => void;
 
   enterRecovery: () => void;
   cancelRecovery: () => void;
@@ -197,6 +199,9 @@ export const useAuth = create<AuthState>((set, get) => ({
     }
   },
 
+  returnToLogin: () =>
+    set({ status: 'locked', error: null, pending: null, recoveryKey: null, recoveryCtx: null }),
+
   enterRecovery: () => set({ status: 'recovery_email', error: null }),
   cancelRecovery: () =>
     set({ status: 'locked', error: null, recoveryCtx: null, pending: null }),
@@ -271,6 +276,12 @@ export const useAuth = create<AuthState>((set, get) => ({
 }));
 
 onAuthLostHandler(() => {
+  // Only an established (unlocked) session can be "lost". A 401 while the user
+  // is mid-flow (login / 2FA / email-verify / recovery) — e.g. a late, leftover
+  // authed request from a previous session firing during re-login — must NOT
+  // reset the flow, or it bounces the user back to the login screen right after
+  // they submit their OTP.
+  if (useAuth.getState().status !== 'unlocked') return;
   crypto.sessionClear().catch(() => {});
   useAuth.setState({ status: 'locked', pending: null });
 });

@@ -23,6 +23,7 @@ type Values = z.infer<typeof schema>;
 
 export function RecoveryResetForm() {
   const completeRecovery = useAuth((s) => s.completeRecovery);
+  const cancelRecovery = useAuth((s) => s.cancelRecovery);
   const busy = useAuth((s) => s.busy);
   const error = useAuth((s) => s.error);
 
@@ -45,6 +46,7 @@ export function RecoveryResetForm() {
       <AuthHeader
         title="Set a new master password"
         subtitle="Enter your recovery key to unlock the vault, then choose a new master password."
+        onBack={() => cancelRecovery()}
       />
 
       <FormError message={error} />
