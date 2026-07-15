@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="./.github/assets/logo.svg" width="112" height="112" alt="Cloak logo" />
+<img src=".github/assets/cloak-logo.png" width="112" height="112" alt="Cloak logo" />
 
 # Cloak
 

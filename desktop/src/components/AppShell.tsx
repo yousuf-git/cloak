@@ -8,7 +8,6 @@ import {
   FolderLock,
   Settings,
   Search,
-  Lock,
   PlayCircle,
   LogOut,
 } from 'lucide-react';
@@ -77,7 +76,7 @@ export function AppShell() {
         style={{ backgroundColor: 'var(--color-surface)', borderBottom: '1px solid var(--color-border)' }}
       >
         <div className="flex items-center gap-2">
-          <ShieldCheck className="h-4 w-4" style={{ color: 'var(--color-brand-500)' }} />
+          <img src="/cloak.png" alt="" className="h-5 w-5" />
           <span className="text-sm font-medium tracking-tight">Cloak</span>
         </div>
 
@@ -99,12 +98,12 @@ export function AppShell() {
           )}
           <button
             onClick={() => (sandbox ? exitSandbox() : logout())}
-            title={sandbox ? 'Exit sandbox' : 'Lock vault'}
+            title={sandbox ? 'Exit sandbox' : 'Log out'}
             className="no-drag flex h-7 items-center gap-1.5 rounded-md px-2 text-xs transition-colors hover:bg-black/5 dark:hover:bg-white/5"
             style={{ color: 'var(--color-fg-muted)' }}
           >
-            {sandbox ? <LogOut className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
-            {sandbox ? 'Exit sandbox' : 'Lock'}
+            <LogOut className="h-3.5 w-3.5" />
+            {sandbox ? 'Exit sandbox' : 'Log out'}
           </button>
         </div>
       </header>

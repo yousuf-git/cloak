@@ -37,9 +37,9 @@ export function AuthScreen() {
             'linear-gradient(160deg, var(--color-brand-700) 0%, var(--color-brand-600) 45%, #312e81 100%)',
         }}
       >
-        <div className="flex items-center gap-2 text-white">
-          <ShieldCheck className="h-6 w-6" />
-          <span className="text-lg font-semibold tracking-tight">Cloak</span>
+        <div className="flex flex-col items-center text-white">
+          <img src="/cloak-mono.png" alt="" className="h-16 w-16" style={{ filter: 'brightness(0) invert(1)' }} />
+          <span className="text-2xl font-semibold tracking-tight">Cloak</span>
         </div>
 
         <div className="flex flex-col gap-6">

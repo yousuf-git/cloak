@@ -1,5 +1,4 @@
 import { motion } from 'framer-motion';
-import { ShieldCheck } from 'lucide-react';
 
 /** Animated boot/splash screen shown while the app initializes. */
 export function Splash() {
@@ -23,7 +22,8 @@ export function Splash() {
           animate={{ boxShadow: ['0 0 0 0 rgba(99,102,241,0.5)', '0 0 0 22px rgba(99,102,241,0)'] }}
           transition={{ duration: 1.8, repeat: Infinity, ease: 'easeOut' }}
         />
-        <ShieldCheck className="h-11 w-11 text-white" strokeWidth={1.75} />
+        {/* Mono mark, forced white — the full-colour logo muddies against the brand tile. */}
+        <img src="/cloak-mono.png" alt="" className="h-16 w-16" style={{ filter: 'brightness(0) invert(1)' }} />
       </motion.div>
 
       <motion.div
