@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { X, Unlock, Pencil, Trash2, Save, Loader2, Copy, Check, ShieldAlert, Info } from 'lucide-react';
+import { X, Unlock, Lock, Pencil, Trash2, Save, Loader2, Copy, Check, ShieldAlert, Info } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { useScramble } from '@/components/ui/SecretField';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import type { EnvFileDto } from '@/lib/api';
 import type { DecryptResult } from '@/hooks/useEnvFiles';
@@ -26,6 +27,8 @@ export function EnvViewer({ file, onClose, getRaw, decrypt, saveEdit, remove }: 
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // Scramble the whole blob between ciphertext and plaintext on decrypt/encrypt.
+  const { text: animText, animating, play } = useScramble(raw ?? undefined);
 
   useEffect(() => {
     getRaw(file._id)
@@ -35,7 +38,13 @@ export function EnvViewer({ file, onClose, getRaw, decrypt, saveEdit, remove }: 
   }, [file._id]);
 
   const showingDecrypted = decrypted !== null;
-  const content = editing ? draft : showingDecrypted ? decrypted : (raw ?? '');
+  const content = editing
+    ? draft
+    : animating
+      ? animText
+      : showingDecrypted
+        ? decrypted
+        : (raw ?? '');
   const dirty = editing && draft !== decrypted;
 
   const doDecrypt = async () => {
@@ -45,11 +54,20 @@ export function EnvViewer({ file, onClose, getRaw, decrypt, saveEdit, remove }: 
       const r = await decrypt(file);
       setDecrypted(r.plaintext);
       setPublicKey(r.publicKeyHex);
+      play(r.plaintext, 'in');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Decryption failed.');
     } finally {
       setBusy(false);
     }
+  };
+
+  // Reverse of decrypt — dissolve plaintext back to ciphertext, then re-mask.
+  const doEncrypt = () => {
+    play(decrypted ?? '', 'out', () => {
+      setDecrypted(null);
+      setPublicKey(null);
+    });
   };
 
   const startEdit = () => {
@@ -155,20 +173,33 @@ export function EnvViewer({ file, onClose, getRaw, decrypt, saveEdit, remove }: 
             <Button size="sm" variant="ghost" icon={copied ? <Check className="h-3.5 w-3.5" style={{ color: '#22c55e' }} /> : <Copy className="h-3.5 w-3.5" />} onClick={copy}>
               Copy
             </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              icon={busy && !editing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Unlock className="h-3.5 w-3.5" />}
-              onClick={doDecrypt}
-              disabled={!canDecrypt || busy || showingDecrypted}
-              title={canDecrypt ? 'Decrypt with your master key' : 'No key stored — cannot decrypt'}
-            >
-              Decrypt
-            </Button>
+            {showingDecrypted && !editing ? (
+              <Button
+                size="sm"
+                variant="outline"
+                icon={<Lock className="h-3.5 w-3.5" />}
+                onClick={doEncrypt}
+                disabled={busy || animating}
+                title="Hide — re-mask the decrypted values"
+              >
+                Encrypt
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                variant="outline"
+                icon={busy && !editing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Unlock className="h-3.5 w-3.5" />}
+                onClick={doDecrypt}
+                disabled={!canDecrypt || busy || animating || showingDecrypted || editing}
+                title={canDecrypt ? 'Decrypt with your master key' : 'No key stored — cannot decrypt'}
+              >
+                Decrypt
+              </Button>
+            )}
           </div>
 
           <div className="flex items-center gap-2">
-            {showingDecrypted && !editing && (
+            {showingDecrypted && !editing && !animating && (
               <Button size="sm" variant="outline" icon={<Pencil className="h-3.5 w-3.5" />} onClick={startEdit}>
                 Edit
               </Button>

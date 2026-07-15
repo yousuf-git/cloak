@@ -7,6 +7,7 @@ import { EmptyState, NoResults } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { TextField } from '@/components/ui/TextField';
+import { useScramble } from '@/components/ui/SecretField';
 import { usePlatforms } from '@/hooks/vault';
 import { useVaultCrypto } from '@/hooks/useVaultCrypto';
 import { useSearch, matchesQuery } from '@/stores/search';
@@ -176,6 +177,7 @@ function BackupCodeRow({ code, onToggle }: { code: BackupCodeDto; onToggle: (use
   const [revealed, setRevealed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
+  const { text: animText, animating, play } = useScramble(code.encrypted_code);
 
   const resolve = async () => {
     if (plain !== null) return plain;
@@ -190,9 +192,13 @@ function BackupCodeRow({ code, onToggle }: { code: BackupCodeDto; onToggle: (use
   };
 
   const toggleReveal = async () => {
-    if (revealed) return setRevealed(false);
-    await resolve();
+    if (revealed) {
+      play(plain ?? '', 'out', () => setRevealed(false));
+      return;
+    }
+    const p = await resolve();
     setRevealed(true);
+    play(p, 'in');
   };
 
   const copy = async () => {
@@ -219,15 +225,18 @@ function BackupCodeRow({ code, onToggle }: { code: BackupCodeDto; onToggle: (use
         title={!revealed ? 'Encrypted — click reveal to decrypt' : undefined}
         className="min-w-0 flex-1 truncate font-mono text-sm"
         style={{
-          color: revealed && plain !== null && !code.is_used ? 'var(--color-fg)' : 'var(--color-fg-muted)',
+          color:
+            (animating || (revealed && plain !== null)) && !code.is_used
+              ? 'var(--color-fg)'
+              : 'var(--color-fg-muted)',
           textDecoration: code.is_used ? 'line-through' : 'none',
         }}
       >
-        {revealed && plain !== null ? plain : maskedCode(code.encrypted_code)}
+        {animating ? animText : revealed && plain !== null ? plain : maskedCode(code.encrypted_code)}
       </code>
 
       <div className="flex shrink-0 items-center gap-0.5">
-        <Icon label={revealed ? 'Hide' : 'Reveal'} onClick={toggleReveal} disabled={busy}>
+        <Icon label={revealed ? 'Hide' : 'Reveal'} onClick={toggleReveal} disabled={busy || animating}>
           {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : revealed ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
         </Icon>
         <Icon label="Copy" onClick={copy}>
