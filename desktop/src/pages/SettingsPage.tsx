@@ -99,9 +99,9 @@ export function SettingsPage() {
           <Row label="30-day Remember Me" hint="Vault key stored in the OS secure keychain">
             <Toggle on={remember} disabled={rememberBusy} onChange={toggleRemember} />
           </Row>
-          <Row label="Lock now" hint="Clear the in-memory keys immediately">
+          <Row label="Log out now" hint="Clear the in-memory keys immediately">
             <Button size="sm" variant="outline" icon={<LogOut className="h-4 w-4" />} onClick={() => logout()}>
-              Lock
+              Log out
             </Button>
           </Row>
         </Section>
