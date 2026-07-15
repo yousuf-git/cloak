@@ -161,12 +161,15 @@ export function useProjects() {
     };
   }
 
+  // (real branch below returns the created project so callers can select it)
+
   return {
     items: query.data ?? [],
     isLoading: query.isLoading,
     create: async (b: { name: string; url?: string; note?: string }) => {
-      await vaultApi.createProject(b);
+      const project = await vaultApi.createProject(b);
       await invalidate();
+      return project;
     },
     update: async (id: string, b: Partial<ProjectDto>) => {
       await vaultApi.updateProject(id, b);

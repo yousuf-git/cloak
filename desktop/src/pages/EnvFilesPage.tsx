@@ -1,6 +1,6 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Upload, FileLock2, Eye, FolderLock, Loader2, ShieldAlert, Info, FileUp, CheckCircle2 } from 'lucide-react';
+import { Upload, FileLock2, Eye, FolderLock, Loader2, ShieldAlert, Info, CheckCircle2, Plus, X } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -24,7 +24,7 @@ const tagTone: Record<EnvTag, 'green' | 'amber' | 'red' | 'brand'> = {
 
 export function EnvFilesPage() {
   const env = useEnvFiles();
-  const { items: projects } = useProjects();
+  const { items: projects, create: createProject } = useProjects();
   const query = useSearch((s) => s.query);
   const [viewing, setViewing] = useState<EnvFileDto | null>(null);
   const [importing, setImporting] = useState(false);
@@ -106,6 +106,10 @@ export function EnvFilesPage() {
       {importing && (
         <ImportEnvModal
           projects={projects.map((p) => ({ id: p._id, name: p.name }))}
+          onCreateProject={async (name) => {
+            const p = await createProject({ name });
+            return { id: p._id, name: p.name };
+          }}
           onClose={() => setImporting(false)}
           onImportPlain={env.importPlain}
           onImportEncrypted={env.importEncrypted}
@@ -117,11 +121,13 @@ export function EnvFilesPage() {
 
 function ImportEnvModal({
   projects,
+  onCreateProject,
   onClose,
   onImportPlain,
   onImportEncrypted,
 }: {
   projects: { id: string; name: string }[];
+  onCreateProject: (name: string) => Promise<{ id: string; name: string }>;
   onClose: () => void;
   onImportPlain: (pid: string, label: string, tag: EnvTag, plaintext: string) => Promise<void>;
   onImportEncrypted: (
@@ -140,8 +146,28 @@ function ImportEnvModal({
   const [key, setKey] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [fileName, setFileName] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Inline "create project on the go" — no project exists, or user wants a new one.
+  const [creatingProject, setCreatingProject] = useState(projects.length === 0);
+  const [newProjectName, setNewProjectName] = useState('');
+  const [projBusy, setProjBusy] = useState(false);
+
+  const createProjectNow = async () => {
+    const name = newProjectName.trim();
+    if (!name) return;
+    setProjBusy(true);
+    setError(null);
+    try {
+      const p = await onCreateProject(name);
+      setProjectId(p.id);
+      setNewProjectName('');
+      setCreatingProject(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not create project.');
+    } finally {
+      setProjBusy(false);
+    }
+  };
 
   // Live structural validation of the pasted/loaded content.
   const parsed = content.trim() ? parseEnv(content) : null;
@@ -149,27 +175,6 @@ function ImportEnvModal({
   const hasContent = Boolean(content.trim());
   const canSubmit =
     Boolean(projectId) && Boolean(label.trim()) && hasContent && validationErrors.length === 0;
-
-  const onPickFile = () => fileInputRef.current?.click();
-
-  const onFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setError(null);
-    try {
-      const text = await file.text();
-      setContent(text);
-      setFileName(file.name);
-      if (file.name && file.name !== '.env') setLabel(file.name);
-      // Auto-detect an already-encrypted dotenvx file.
-      if (parseEnv(text).encrypted) setMode('encrypted');
-    } catch {
-      setError('Could not read that file.');
-    } finally {
-      // Allow re-selecting the same file.
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    }
-  };
 
   const submit = async () => {
     if (!canSubmit) return;
@@ -203,12 +208,49 @@ function ImportEnvModal({
       }
     >
       <div className="flex flex-col gap-3 pb-4">
-        {projects.length === 0 ? (
-          <p className="text-xs" style={{ color: '#dc2626' }}>
-            Create a project first — env files belong to a project.
-          </p>
-        ) : (
-          <Select label="Project" value={projectId} onChange={setProjectId} options={projects.map((p) => ({ value: p.id, label: p.name }))} />
+        {projects.length > 0 && (
+          <div className="flex items-end gap-2">
+            <div className="min-w-0 flex-1">
+              <Select
+                label="Project"
+                value={projectId}
+                onChange={setProjectId}
+                options={projects.map((p) => ({ value: p.id, label: p.name }))}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => setCreatingProject((v) => !v)}
+              title="New project"
+              aria-label="New project"
+              className="no-drag flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border transition-colors hover:bg-black/5 dark:hover:bg-white/5"
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-brand-500)' }}
+            >
+              {creatingProject ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+            </button>
+          </div>
+        )}
+
+        {creatingProject && (
+          <div className="flex items-end gap-2">
+            <div className="min-w-0 flex-1">
+              <TextField
+                label={projects.length === 0 ? 'Create a project (env files belong to one)' : 'New project name'}
+                placeholder="e.g. Acme API"
+                value={newProjectName}
+                onChange={(e) => setNewProjectName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    createProjectNow();
+                  }
+                }}
+              />
+            </div>
+            <Button size="sm" onClick={createProjectNow} disabled={projBusy || !newProjectName.trim()}>
+              {projBusy ? 'Creating…' : 'Create'}
+            </Button>
+          </div>
         )}
 
         <div className="grid grid-cols-2 gap-3">
@@ -224,32 +266,16 @@ function ImportEnvModal({
         <SegmentedMode mode={mode} onChange={setMode} />
 
         <div className="flex flex-col gap-1.5">
-          <div className="flex items-center justify-between">
-            <label className="text-xs font-medium" style={{ color: 'var(--color-fg-muted)' }}>
-              {mode === 'plain' ? 'Paste your .env contents' : 'Paste your encrypted .env contents'}
-            </label>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".env,.txt,text/plain"
-              onChange={onFileChange}
-              className="hidden"
-            />
-            <button
-              type="button"
-              onClick={onPickFile}
-              className="no-drag inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-medium transition-colors hover:bg-black/5 dark:hover:bg-white/5"
-              style={{ color: 'var(--color-brand-500)' }}
-            >
-              <FileUp className="h-3.5 w-3.5" />
-              Import from file
-            </button>
-          </div>
+          <label className="text-xs font-medium" style={{ color: 'var(--color-fg-muted)' }}>
+            {mode === 'plain' ? 'Paste your .env contents' : 'Paste your encrypted .env contents'}
+          </label>
           <textarea
             value={content}
             onChange={(e) => {
-              setContent(e.target.value);
-              setFileName(null);
+              const text = e.target.value;
+              setContent(text);
+              // Auto-detect an already-encrypted dotenvx paste.
+              if (parseEnv(text).encrypted) setMode('encrypted');
             }}
             rows={7}
             spellCheck={false}
@@ -257,11 +283,6 @@ function ImportEnvModal({
             className="rounded-lg border px-3 py-2 font-mono text-xs outline-none focus:border-[var(--color-brand-500)]"
             style={{ backgroundColor: 'var(--color-surface-2)', borderColor: 'var(--color-border)', color: 'var(--color-fg)' }}
           />
-          {fileName && (
-            <p className="text-[11px]" style={{ color: 'var(--color-fg-muted)' }}>
-              Loaded <span className="font-mono">{fileName}</span>
-            </p>
-          )}
           {parsed && validationErrors.length === 0 && (
             <p className="flex items-center gap-1.5 text-[11px]" style={{ color: '#16a34a' }}>
               <CheckCircle2 className="h-3.5 w-3.5" />
