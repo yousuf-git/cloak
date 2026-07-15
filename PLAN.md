@@ -219,7 +219,8 @@ XChaCha20-Poly1305 ciphertext produced client-side; the server treats them as op
   `last_login_at`, `projects[]` = `{ name, url?, note? }`.
 - **`env-file`** — `project_id` (ref), `label`, `tag` (`Local|Staging|Production|Custom`),
   `encrypted_dotenvx_key` *(enc)*, `path` (Cloudinary reference).
-- **`creds`** — `name`, `url?`, `username` *(enc)*, `password` *(enc)*, `note?`.
+- **`creds`** — `name`, `url?`, `username` (plaintext — not a secret; searchable metadata),
+  `password` *(enc)*, `note?`.
 - **`api-keys`** — `label`, `url?`, `key` *(enc)*, `note?`.
 - **`platform`** — `user_id` (ref), `name`, `note?`,
   `backup_codes[]` = `{ encrypted_code (enc), is_used=false, used_at? }`.
@@ -382,11 +383,19 @@ Each phase ends with a demoable, testable increment. Acceptance criteria are the
   disabled with an explanatory note when no key is stored.
 - **Deferred:** `dotenv-parse`/`envalid` validation UX with per-line Skip (planned for import polish).
 
-### Phase 5 — Import / Export
-- Google Password Manager CSV import → map `name,url,username,password,note` → encrypted `creds`
-  (with column mapping + preview + dedupe).
-- Vault/credential export to file (encrypted or explicitly-confirmed plaintext export).
-- **Done when:** a Google CSV imports losslessly and a re-export reproduces the entries.
+### Phase 5 — Import / Export — ✅ DONE
+- **Import** (`ImportCredsModal` on `CredentialsPage`): dependency-free RFC-4180 CSV parser
+  (`lib/csv-parse.ts`) + Google Password Manager header auto-mapping (`name,url,username,password,note`,
+  tolerant of synonyms/column drift), editable per-field column mapping, live preview table, and
+  duplicate-skip (same name & username, vs existing vault + within-file). Rows encrypt the password
+  via the Rust core (username stored plaintext) before save; works in Sandbox too.
+- **Export** (`ExportCredsModal`): two portable formats via `lib/vault-export.ts` —
+  (1) passphrase-sealed `.cloak` backup (WebCrypto PBKDF2-SHA256 → AES-256-GCM, DEK-independent,
+  re-importable), and (2) Google-compatible plaintext CSV behind an explicit acknowledgement. Both
+  stream to disk via a Blob download.
+- **Round-trip:** a Cloak CSV export re-imports losslessly; an encrypted `.cloak` backup is detected
+  on import and decrypted with its passphrase into the same mapping/preview pipeline.
+- **Done when:** a Google CSV imports losslessly and a re-export reproduces the entries. ✅
 
 ### Phase 6 — Hardening, UX Polish, Release
 - Enforce §6 safeguards: TLS 1.3 assertions, no plaintext in logs, memory zeroization audit.

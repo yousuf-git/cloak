@@ -42,7 +42,7 @@ interface SandboxState {
   addCodes: (id: string, codes: string[]) => void;
   toggleCode: (id: string, codeId: string, used: boolean) => void;
 
-  addProject: (p: { name: string; url?: string; note?: string }) => void;
+  addProject: (p: { name: string; url?: string; note?: string }) => ProjectDto;
   updateProject: (id: string, p: Partial<ProjectDto>) => void;
   removeProject: (id: string) => void;
 
@@ -62,7 +62,7 @@ const seedCreds: CredDto[] = sampleCredentials.map((c) => ({
   _id: c.id,
   name: c.name,
   url: c.url,
-  username: sbEncrypt(c.username),
+  username: c.username, // plaintext — username is not a secret
   password: sbEncrypt(c.password),
   note: c.note,
   created_at: now(),
@@ -209,7 +209,11 @@ export const useSandboxData = create<SandboxState>((set) => ({
       ),
     })),
 
-  addProject: (p) => set((s) => ({ projects: [...s.projects, { _id: nextId(), ...p }] })),
+  addProject: (p) => {
+    const project: ProjectDto = { _id: nextId(), ...p };
+    set((s) => ({ projects: [...s.projects, project] }));
+    return project;
+  },
   updateProject: (id, p) =>
     set((s) => ({ projects: s.projects.map((x) => (x._id === id ? { ...x, ...p } : x)) })),
   removeProject: (id) =>

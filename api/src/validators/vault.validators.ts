@@ -19,7 +19,7 @@ export const projectUpdateSchema = projectCreateSchema.partial();
 export const credCreateSchema = z.object({
   name: shortText,
   url: optionalText,
-  username: cipher,
+  username: z.string().trim().max(512), // plaintext — not a secret; may be empty (imported rows)
   password: cipher,
   note: optionalText,
   project_id: objectId.optional(),

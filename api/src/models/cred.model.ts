@@ -5,8 +5,9 @@ export interface CredDoc {
   project_id?: Types.ObjectId;
   name: string;
   url?: string;
-  // Ciphertext (XChaCha20-Poly1305, client-side). Opaque to the server.
+  // Plaintext — searchable metadata, not a secret.
   username: string;
+  // Ciphertext (XChaCha20-Poly1305, client-side). Opaque to the server.
   password: string;
   note?: string;
   created_at: Date;
