@@ -12,9 +12,10 @@ export function Footer() {
               <Image
                 src="/logo.png"
                 alt=""
-                width={40}
-                height={40}
+                width={80}
+                height={80}
                 className="h-10 w-10 rounded-full"
+                quality={100}
               />
               <span className="font-display text-3xl tracking-tight">{SITE.name}</span>
             </Link>

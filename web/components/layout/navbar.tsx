@@ -48,12 +48,13 @@ export function Navbar({ downloadHref, repo }: NavbarProps) {
             <Image
               src="/logo.png"
               alt=""
-              width={32}
-              height={32}
+              width={64}
+              height={64}
               className="h-8 w-8 rounded-full"
               priority
+              quality={100}
             />
-            <span className="text-[1.0625rem] font-semibold tracking-tight">{SITE.name}</span>
+            <span className="font-display text-2xl tracking-tight">{SITE.name}</span>
           </Link>
 
           <div className="hidden items-center gap-1 lg:flex">
