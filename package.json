@@ -10,8 +10,10 @@
   "scripts": {
     "dev:api": "pnpm --filter @cloak/api dev",
     "dev:desktop": "pnpm --filter @cloak/desktop dev",
+    "dev:web": "pnpm --filter @cloak/web dev",
     "build:api": "pnpm --filter @cloak/api build",
     "build:desktop": "pnpm --filter @cloak/desktop build",
+    "build:web": "pnpm --filter @cloak/web build",
     "ship": "bash scripts/ship.sh",
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
@@ -20,7 +22,9 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "argon2",
-      "esbuild"
+      "esbuild",
+      "sharp",
+      "unrs-resolver"
     ]
   }
 }
