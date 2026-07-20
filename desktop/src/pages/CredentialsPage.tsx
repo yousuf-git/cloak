@@ -39,11 +39,11 @@ import {
 } from '@/lib/csv-parse';
 import {
   credsToCsv,
-  downloadText,
   encryptBackup,
   decryptBackup,
   asBackupEnvelope,
 } from '@/lib/vault-export';
+import { saveDownload } from '@/lib/native-fs';
 
 export function CredentialsPage() {
   const { items, isLoading, create, update, remove } = useCreds();
@@ -620,10 +620,16 @@ function ExportCredsModal({ items, onClose }: { items: CredDto[]; onClose: () =>
       const rows = await buildRows();
       const csv = credsToCsv(rows);
       if (mode === 'plain') {
-        downloadText('cloak-credentials.csv', csv, 'text/csv');
+        await saveDownload('cloak-credentials.csv', csv, {
+          mime: 'text/csv',
+          filters: [{ name: 'CSV', extensions: ['csv'] }],
+        });
       } else {
         const envelope = await encryptBackup(passphrase, csv);
-        downloadText('cloak-backup.cloak', envelope, 'application/json');
+        await saveDownload('cloak-backup.cloak', envelope, {
+          mime: 'application/json',
+          filters: [{ name: 'Cloak backup', extensions: ['cloak'] }],
+        });
       }
       onClose();
     } catch (err) {

@@ -9,8 +9,8 @@ use commands::{
   crypto_encrypt_env_value, crypto_encrypt_field, crypto_env_count_variables, crypto_env_decrypt,
   crypto_env_encrypt_existing, crypto_env_encrypt_new, crypto_env_wrap_key,
   crypto_generate_env_keypair, crypto_prepare_signup, crypto_recovery_reset, crypto_reveal_all_env,
-  crypto_session_clear, crypto_session_status, crypto_unlock_session, remember_clear,
-  remember_enable, remember_status, remember_try_restore,
+  crypto_session_clear, crypto_session_status, crypto_unlock_session, read_text_file,
+  remember_clear, remember_enable, remember_status, remember_try_restore, write_text_file,
 };
 use session::CryptoSession;
 use sidecar::ApiProcess;
@@ -18,6 +18,7 @@ use sidecar::ApiProcess;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
+    .plugin(tauri_plugin_dialog::init())
     .manage(CryptoSession::default())
     .manage(ApiProcess::default())
     .setup(|app| {
@@ -62,6 +63,8 @@ pub fn run() {
       remember_try_restore,
       remember_clear,
       remember_status,
+      write_text_file,
+      read_text_file,
     ])
     .build(tauri::generate_context!())
     .expect("error while building tauri application")

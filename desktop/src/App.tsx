@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { Splash } from './components/Splash';
 import { AppShell } from './components/AppShell';
+import { Toaster } from './components/ui/Toaster';
 import { AuthScreen } from './components/auth/AuthScreen';
 import { useAuth } from './stores/auth';
 import { useAppMode } from './stores/app-mode';
@@ -27,6 +28,7 @@ export function App() {
     <>
       <AnimatePresence>{booting && <Splash key="splash" />}</AnimatePresence>
       {!booting && (showShell ? <AppShell /> : <AuthScreen />)}
+      <Toaster />
     </>
   );
 }
