@@ -13,8 +13,8 @@ export function SecurityBackdrop({ className, variant = "hero" }: SecurityBackdr
         className={cn("pointer-events-none absolute inset-0 overflow-hidden", className)}
         aria-hidden
       >
-        {/* Top spotlight — visible forest-green wash */}
-        <div className="absolute inset-x-0 top-0 h-[min(75vh,600px)] bg-[radial-gradient(ellipse_90%_70%_at_50%_-10%,rgba(45,106,79,0.22),transparent)] dark:bg-[radial-gradient(ellipse_90%_70%_at_50%_-10%,rgba(45,106,79,0.32),transparent)]" />
+        {/* Top spotlight — soft green wash (light theme) */}
+        <div className="absolute inset-x-0 top-0 h-[min(75vh,600px)] bg-[radial-gradient(ellipse_90%_70%_at_50%_-10%,rgba(45,106,79,0.12),transparent)] dark:bg-[radial-gradient(ellipse_90%_70%_at_50%_-10%,rgba(45,106,79,0.28),transparent)]" />
 
         {/* Soft side accents */}
         <div className="absolute -top-16 left-[20%] h-80 w-80 rounded-full bg-brand-400/15 blur-3xl dark:bg-brand-500/20" />

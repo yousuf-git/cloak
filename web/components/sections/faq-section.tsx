@@ -1,79 +1,75 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { motion, useInView } from "motion/react";
-import { ChevronDown, HelpCircle } from "lucide-react";
-import { Section } from "@/components/ui/section";
-import { usePrefersReducedMotion } from "@/hooks/use-platform";
+import { useState } from "react";
+import { motion, AnimatePresence } from "motion/react";
+import { Plus } from "lucide-react";
+import { FAQ_ITEMS } from "@/content/site-content";
+import { Reveal } from "@/components/motion/reveal";
 import { cn } from "@/lib/utils";
 
-interface FAQItem {
-  question: string;
-  answer: string;
+interface FAQSectionProps {
+  items?: typeof FAQ_ITEMS;
 }
 
-export function FAQSection({ items }: { items: readonly FAQItem[] }) {
+export function FAQSection({ items = FAQ_ITEMS }: FAQSectionProps) {
   const [open, setOpen] = useState<number | null>(0);
-  const ref = useRef<HTMLDivElement>(null);
-  const inView = useInView(ref, { amount: 0.15, once: true });
-  const reduced = usePrefersReducedMotion();
 
   return (
-    <Section
-      id="faq"
-      label="FAQ"
-      title="Questions"
-      description="Common questions before you download."
-      className="pb-20"
-      icon={<HelpCircle className="h-4 w-4" />}
-      accent
-    >
-      <div ref={ref} className="mx-auto max-w-3xl">
-        {items.map((item, index) => {
-          const isOpen = open === index;
-          return (
-            <motion.div
-              key={item.question}
-              initial={reduced ? false : { opacity: 0, y: 12 }}
-              animate={inView ? { opacity: 1, y: 0 } : {}}
-              transition={{ delay: index * 0.06, duration: 0.4 }}
-              className="mb-3"
-            >
-              <div
-                className={cn(
-                  "panel overflow-hidden transition-colors",
-                  isOpen && "border-brand-500/25",
-                )}
-              >
-                <button
-                  type="button"
-                  onClick={() => setOpen(isOpen ? null : index)}
-                  className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left text-base font-medium hover:bg-[var(--color-surface)]"
-                  aria-expanded={isOpen}
-                >
-                  <span className="flex items-center gap-3">
-                    <span className="font-mono text-sm text-[var(--color-fg-subtle)]">
-                      {String(index + 1).padStart(2, "0")}
-                    </span>
-                    {item.question}
-                  </span>
-                  <ChevronDown
-                    className={cn(
-                      "h-5 w-5 shrink-0 text-[var(--color-fg-muted)] transition-transform",
-                      isOpen && "rotate-180 text-brand-600 dark:text-brand-400",
+    <section id="faq" className="section-pad border-t border-[var(--color-border)]">
+      <div className="container-wide">
+        <div className="grid gap-12 lg:grid-cols-[0.85fr_1.15fr] lg:gap-20">
+          <Reveal>
+            <p className="text-xs font-medium tracking-[0.16em] text-[var(--color-fg-subtle)] uppercase">
+              FAQ
+            </p>
+            <h2 className="mt-4 text-balance text-3xl font-semibold tracking-[-0.03em] sm:text-4xl">
+              Questions, answered plainly.
+            </h2>
+            <p className="mt-5 max-w-sm text-[var(--color-fg-muted)]">
+              Security model, platforms, sandbox, and license — without the marketing fog.
+            </p>
+          </Reveal>
+
+          <div className="divide-y divide-[var(--color-border)] border-y border-[var(--color-border)]">
+            {items.map((item, i) => {
+              const isOpen = open === i;
+              return (
+                <div key={item.question}>
+                  <button
+                    type="button"
+                    onClick={() => setOpen(isOpen ? null : i)}
+                    className="flex w-full items-start justify-between gap-6 py-6 text-left transition-colors hover:text-[var(--color-fg)]"
+                    aria-expanded={isOpen}
+                  >
+                    <span className="text-lg font-medium tracking-tight">{item.question}</span>
+                    <Plus
+                      className={cn(
+                        "mt-1 h-5 w-5 shrink-0 text-[var(--color-fg-subtle)] transition-transform duration-300",
+                        isOpen && "rotate-45",
+                      )}
+                    />
+                  </button>
+                  <AnimatePresence initial={false}>
+                    {isOpen && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+                        className="overflow-hidden"
+                      >
+                        <p className="max-w-xl pb-6 leading-relaxed text-[var(--color-fg-muted)]">
+                          {item.answer}
+                        </p>
+                      </motion.div>
                     )}
-                  />
-                </button>
-                {isOpen && (
-                  <div className="border-t border-[var(--color-border)] bg-[var(--color-surface)]/50 px-5 py-4">
-                    <p className="text-base leading-relaxed text-[var(--color-fg-muted)]">{item.answer}</p>
-                  </div>
-                )}
-              </div>
-            </motion.div>
-          );
-        })}
+                  </AnimatePresence>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
-    </Section>
+    </section>
   );
 }

@@ -1,5 +1,5 @@
-import { SectionGlow } from "@/components/ui/section-glow";
 import { cn } from "@/lib/utils";
+import { SectionGlow } from "@/components/ui/section-glow";
 
 interface SectionProps {
   id?: string;
@@ -12,6 +12,7 @@ interface SectionProps {
   className?: string;
   icon?: React.ReactNode;
   headerAlign?: "left" | "center";
+  visual?: React.ReactNode;
 }
 
 export function Section({
@@ -25,13 +26,14 @@ export function Section({
   className,
   icon,
   headerAlign = "left",
+  visual,
 }: SectionProps) {
   return (
     <section
       id={id}
       className={cn(
-        "relative py-20 sm:py-24",
-        alt && "border-y border-[var(--color-border)] bg-[var(--color-surface)]",
+        "relative py-16 sm:py-20",
+        alt && "border-y border-[var(--color-border)] bg-[var(--color-surface-2)]/60",
         className,
       )}
     >
@@ -39,20 +41,28 @@ export function Section({
       <div className="container-wide relative">
         <header
           className={cn(
-            "mb-12 max-w-3xl",
-            headerAlign === "center" && "mx-auto text-center",
+            "mb-10",
+            visual ? "grid items-center gap-8 lg:grid-cols-[1fr_auto]" : "max-w-2xl",
+            headerAlign === "center" && !visual && "mx-auto text-center",
           )}
         >
-          {label && (
-            <p className="section-label mb-3">
-              {icon}
-              {label}
-            </p>
-          )}
-          <h2 className="font-semibold tracking-tight text-[var(--color-fg)]">{title}</h2>
-          {description && (
-            <p className="mt-4 text-lg leading-relaxed text-[var(--color-fg-muted)]">{description}</p>
-          )}
+          <div className={cn(headerAlign === "center" && !visual && "mx-auto")}>
+            {label && (
+              <p className="section-label mb-3">
+                {icon}
+                {label}
+              </p>
+            )}
+            <h2 className="text-3xl font-bold tracking-tight text-[var(--color-fg)] sm:text-4xl">
+              {title}
+            </h2>
+            {description && (
+              <p className="mt-3 max-w-2xl text-lg leading-relaxed text-[var(--color-fg-muted)]">
+                {description}
+              </p>
+            )}
+          </div>
+          {visual && <div className="hidden justify-end lg:flex">{visual}</div>}
         </header>
         {children}
       </div>

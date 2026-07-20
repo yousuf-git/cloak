@@ -4,10 +4,12 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { Menu, X } from "lucide-react";
+import { motion, useScroll, useMotionValueEvent } from "motion/react";
 import { NAV_LINKS, SITE } from "@/constants/site";
 import { ThemeToggle } from "@/components/theme-provider";
-import { Button } from "@/components/ui/button";
+import { MagneticButton } from "@/components/ui/magnetic-button";
 import { formatNumber } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import type { GitHubRepoStats } from "@/types/github";
 
 interface NavbarProps {
@@ -17,6 +19,12 @@ interface NavbarProps {
 
 export function Navbar({ downloadHref, repo }: NavbarProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+  const { scrollY } = useScroll();
+
+  useMotionValueEvent(scrollY, "change", (y) => {
+    setScrolled(y > 24);
+  });
 
   useEffect(() => {
     document.body.style.overflow = mobileOpen ? "hidden" : "";
@@ -26,12 +34,26 @@ export function Navbar({ downloadHref, repo }: NavbarProps) {
   }, [mobileOpen]);
 
   return (
-    <header className="sticky top-0 z-50 border-b border-[var(--color-border)] bg-[var(--color-bg)]/95 backdrop-blur-sm">
-      <nav className="container-wide flex h-16 items-center justify-between">
-        <div className="flex items-center gap-10">
-          <Link href="/" className="flex items-center gap-2.5">
-            <Image src="/logo.svg" alt="" width={28} height={28} className="h-7 w-7" />
-            <span className="text-lg font-semibold">{SITE.name}</span>
+    <header
+      className={cn(
+        "sticky top-0 z-50 transition-[background-color,border-color] duration-300",
+        scrolled
+          ? "border-b border-[var(--color-border)] bg-[var(--color-bg)]/92 backdrop-blur-sm"
+          : "border-b border-transparent bg-transparent",
+      )}
+    >
+      <nav className="container-wide flex h-[4.25rem] items-center justify-between">
+        <div className="flex items-center gap-12">
+          <Link href="/" className="group flex items-center gap-2.5">
+            <Image
+              src="/logo.png"
+              alt=""
+              width={32}
+              height={32}
+              className="h-8 w-8 rounded-full"
+              priority
+            />
+            <span className="text-[1.0625rem] font-semibold tracking-tight">{SITE.name}</span>
           </Link>
 
           <div className="hidden items-center gap-1 lg:flex">
@@ -39,7 +61,7 @@ export function Navbar({ downloadHref, repo }: NavbarProps) {
               <Link
                 key={link.href}
                 href={link.href}
-                className="px-3 py-2 text-base text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]"
+                className="link-underline px-3 py-2 text-[0.9375rem] text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]"
               >
                 {link.label}
               </Link>
@@ -53,25 +75,22 @@ export function Navbar({ downloadHref, repo }: NavbarProps) {
               href={SITE.repo}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-base text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]"
+              className="font-mono text-sm text-[var(--color-fg-subtle)] transition-colors hover:text-[var(--color-fg)]"
             >
               ★ {formatNumber(repo.stars)}
             </a>
           )}
           <ThemeToggle />
-          <Button href={SITE.repo} variant="secondary" size="sm" external>
-            GitHub
-          </Button>
-          <Button href={downloadHref} size="md">
+          <MagneticButton href={downloadHref} size="md">
             Download
-          </Button>
+          </MagneticButton>
         </div>
 
         <div className="flex items-center gap-2 lg:hidden">
           <ThemeToggle />
           <button
             type="button"
-            className="inline-flex h-10 w-10 items-center justify-center border border-[var(--color-border)]"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[var(--color-border)]"
             onClick={() => setMobileOpen(!mobileOpen)}
             aria-label={mobileOpen ? "Close menu" : "Open menu"}
           >
@@ -81,26 +100,30 @@ export function Navbar({ downloadHref, repo }: NavbarProps) {
       </nav>
 
       {mobileOpen && (
-        <div className="border-t border-[var(--color-border)] px-4 py-4 lg:hidden">
+        <motion.div
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="border-t border-[var(--color-border)] bg-[var(--color-bg)] px-6 py-6 lg:hidden"
+        >
           {NAV_LINKS.map((link) => (
             <Link
               key={link.href}
               href={link.href}
               onClick={() => setMobileOpen(false)}
-              className="block py-2.5 text-base text-[var(--color-fg-muted)]"
+              className="block py-3 text-lg text-[var(--color-fg-muted)]"
             >
               {link.label}
             </Link>
           ))}
-          <div className="mt-4 flex gap-2 border-t border-[var(--color-border)] pt-4">
-            <Button href={SITE.repo} variant="secondary" size="sm" external className="flex-1">
+          <div className="mt-6 flex gap-3 border-t border-[var(--color-border)] pt-6">
+            <MagneticButton href={SITE.repo} variant="secondary" size="md" external className="flex-1">
               GitHub
-            </Button>
-            <Button href={downloadHref} size="md" className="flex-1">
+            </MagneticButton>
+            <MagneticButton href={downloadHref} size="md" className="flex-1">
               Download
-            </Button>
+            </MagneticButton>
           </div>
-        </div>
+        </motion.div>
       )}
     </header>
   );

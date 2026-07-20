@@ -10,31 +10,42 @@ interface ProductWindowProps {
 
 export function ProductWindow({ className, compact = false }: ProductWindowProps) {
   return (
-    <div className={cn("panel overflow-hidden shadow-md", className)}>
-      <div className="flex items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-surface-2)] px-4 py-2.5">
+    <div
+      className={cn(
+        "overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]",
+        className,
+      )}
+    >
+      <div className="flex items-center gap-2 border-b border-[var(--color-border)] px-4 py-3">
         <div className="flex gap-1.5">
-          <span className="h-3 w-3 rounded-full bg-[#ff5f57]" />
-          <span className="h-3 w-3 rounded-full bg-[#febc2e]" />
-          <span className="h-3 w-3 rounded-full bg-[#28c840]" />
+          <span className="h-2.5 w-2.5 rounded-full bg-[var(--color-border-strong)]" />
+          <span className="h-2.5 w-2.5 rounded-full bg-[var(--color-border-strong)]" />
+          <span className="h-2.5 w-2.5 rounded-full bg-[var(--color-border-strong)]" />
         </div>
-        <span className="flex-1 text-center font-mono text-sm text-[var(--color-fg-subtle)]">
+        <span className="flex-1 text-center font-mono text-xs text-[var(--color-fg-subtle)]">
           Cloak — production.env
         </span>
-        <Lock className="h-4 w-4 text-brand-600 dark:text-brand-400" />
+        <Lock className="h-3.5 w-3.5 text-[var(--color-fg-subtle)]" />
       </div>
 
-      <div className={cn("grid", compact ? "grid-cols-[160px_1fr]" : "grid-cols-[190px_1fr]")}>
-        <aside className="border-r border-[var(--color-border)] bg-[var(--color-bg)] p-3">
-          <div className="mb-4 flex items-center gap-2 px-2 py-1">
-            <Image src="/logo.svg" alt="" width={20} height={20} />
-            <span className="text-sm font-semibold">Cloak</span>
+      <div className={cn("grid", compact ? "grid-cols-[140px_1fr]" : "grid-cols-[1fr] sm:grid-cols-[180px_1fr]")}>
+        <aside className="hidden border-r border-[var(--color-border)] bg-[var(--color-bg)] p-4 sm:block">
+          <div className="mb-5 flex items-center gap-2 px-1">
+            <Image
+              src="/logo.png"
+              alt=""
+              width={18}
+              height={18}
+              className="h-[18px] w-[18px] rounded-full"
+            />
+            <span className="text-sm font-semibold tracking-tight">Cloak</span>
           </div>
           <nav className="space-y-0.5">
             {VAULT_MODULES.map((item, i) => (
               <div
                 key={item}
                 className={cn(
-                  "px-2.5 py-1.5 text-sm",
+                  "rounded-md px-2.5 py-1.5 text-sm",
                   i === 2
                     ? "bg-[var(--color-surface-2)] font-medium text-[var(--color-fg)]"
                     : "text-[var(--color-fg-muted)]",
@@ -46,14 +57,16 @@ export function ProductWindow({ className, compact = false }: ProductWindowProps
           </nav>
         </aside>
 
-        <main className="bg-[var(--color-bg)] p-4">
-          <div className="mb-4 flex items-center justify-between border-b border-[var(--color-border)] pb-3">
+        <main className="bg-[var(--color-bg)] p-4 sm:p-5">
+          <div className="mb-5 flex items-start justify-between gap-4 border-b border-[var(--color-border)] pb-4">
             <div>
-              <p className="text-base font-semibold">production.env</p>
-              <p className="text-sm text-[var(--color-fg-subtle)]">api-service · dotenvx</p>
+              <p className="font-medium tracking-tight">production.env</p>
+              <p className="mt-0.5 font-mono text-xs text-[var(--color-fg-subtle)]">
+                api-service · dotenvx
+              </p>
             </div>
-            <span className="inline-flex items-center gap-1.5 border border-brand-500/25 bg-brand-500/10 px-2.5 py-1 font-mono text-sm text-brand-700 dark:text-brand-300">
-              <Lock className="h-3.5 w-3.5" />
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border)] px-2.5 py-1 font-mono text-[0.6875rem] text-[var(--color-fg-muted)]">
+              <Lock className="h-3 w-3" />
               encrypted
             </span>
           </div>
@@ -67,10 +80,12 @@ export function ProductWindow({ className, compact = false }: ProductWindowProps
             ].map((row) => (
               <div
                 key={row.key}
-                className="flex items-center justify-between border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2"
+                className="flex items-center justify-between gap-4 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2.5"
               >
-                <span className="font-mono text-sm text-[var(--color-fg)]">{row.key}</span>
-                <span className="font-mono text-sm text-[var(--color-fg-subtle)]">{row.value}</span>
+                <span className="font-mono text-xs text-[var(--color-fg)] sm:text-sm">{row.key}</span>
+                <span className="font-mono text-xs text-[var(--color-fg-subtle)] sm:text-sm">
+                  {row.value}
+                </span>
               </div>
             ))}
           </div>

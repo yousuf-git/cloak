@@ -2,7 +2,7 @@ export const SITE = {
   name: "Cloak",
   tagline: "Zero-knowledge secrets for developers",
   description:
-    "A zero-knowledge, developer-centric secrets manager and password vault — built as a native desktop app. Your master password and plaintext secrets never leave your machine.",
+    "Zero-knowledge secrets manager for developers. Native desktop vault for credentials, API keys, and encrypted .env files — plaintext never leaves your machine.",
   url: "https://cloak.app",
   repo: "https://github.com/yousuf-git/cloak",
   repoApi: "https://api.github.com/repos/yousuf-git/cloak",
@@ -11,10 +11,11 @@ export const SITE = {
 } as const;
 
 export const NAV_LINKS = [
+  { label: "Product", href: "#product" },
   { label: "Features", href: "#features" },
-  { label: "Architecture", href: "#architecture" },
-  { label: "Security", href: "#security" },
-  { label: "Docs", href: `${SITE.repo}#getting-started` },
+  { label: "Security", href: "#why" },
+  { label: "FAQ", href: "#faq" },
+  { label: "Download", href: "#download" },
 ] as const;
 
 export const PLATFORMS = [

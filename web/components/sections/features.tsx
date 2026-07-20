@@ -1,84 +1,70 @@
 "use client";
 
-import { useRef } from "react";
-import { motion, useInView } from "motion/react";
-import { Layers } from "lucide-react";
-import { FEATURES } from "@/content/site-content";
-import { Section } from "@/components/ui/section";
-import { usePrefersReducedMotion } from "@/hooks/use-platform";
-import { cn } from "@/lib/utils";
+import { FEATURE_BLOCKS } from "@/content/site-content";
+import { Reveal } from "@/components/motion/reveal";
+import { LottiePlayer } from "@/components/ui/lottie-player";
+import { LOTTIE_ONCE } from "@/lib/lottie-once";
+import { RecoveryGif } from "@/components/ui/recovery-gif";
 
-const CATEGORIES = [
-  "Cryptography",
-  "Cryptography",
-  "Vault",
-  "Vault",
-  "Auth",
-  "Auth",
-  "Auth",
-  "UX",
-  "UX",
-] as const;
+const FEATURE_ANIM: Record<string, string> = {
+  crypto: LOTTIE_ONCE.crypto,
+  dotenvx: LOTTIE_ONCE.dotenvx,
+  reveal: LOTTIE_ONCE.exposure,
+};
 
 export function FeaturesSection() {
-  const ref = useRef<HTMLDivElement>(null);
-  const inView = useInView(ref, { amount: 0.1, once: true });
-  const reduced = usePrefersReducedMotion();
-
   return (
-    <Section
-      id="features"
-      label="Features"
-      title="What you get"
-      description="Nine capabilities from the README — cryptography, vault modules, dotenvx, recovery, and sandbox mode."
-      alt
-      icon={<Layers className="h-4 w-4" />}
-    >
-      <div ref={ref} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {FEATURES.map((feature, index) => {
-          const isHighlight = index === 0;
-          const Icon = feature.icon;
+    <section id="features" className="section-pad">
+      <div className="container-wide">
+        <Reveal>
+          <p className="text-xs font-medium tracking-[0.16em] text-[var(--color-fg-subtle)] uppercase">
+            Features
+          </p>
+          <h2 className="mt-4 max-w-2xl text-balance text-3xl font-semibold tracking-[-0.03em] sm:text-4xl lg:text-[2.75rem] lg:leading-[1.15]">
+            Engineered for developers who refuse to trust the cloud with keys.
+          </h2>
+        </Reveal>
 
-          return (
-            <motion.article
-              key={feature.title}
-              initial={reduced ? false : { opacity: 0, y: 20 }}
-              animate={inView ? { opacity: 1, y: 0 } : {}}
-              transition={{ delay: index * 0.05, duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-              className={cn(
-                "group panel relative overflow-hidden p-6 transition-shadow hover:shadow-lg hover:shadow-brand-500/5",
-                isHighlight && "sm:col-span-2 lg:col-span-1 lg:row-span-1 border-brand-500/25 bg-brand-500/[0.04]",
-              )}
-            >
-              <Icon
-                className="pointer-events-none absolute -bottom-3 -right-3 h-24 w-24 text-[var(--color-fg)]/[0.03] transition-colors group-hover:text-brand-500/10"
-                strokeWidth={0.75}
-              />
-
-              <div className="relative">
-                <div className="mb-4 flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-3">
-                    <span className="font-mono text-sm font-semibold text-[var(--color-fg-subtle)]">
-                      {String(index + 1).padStart(2, "0")}
-                    </span>
-                    <div className={cn("icon-box", isHighlight && "!border-brand-500/30 !bg-brand-500/15")}>
-                      <Icon className="h-5 w-5" strokeWidth={1.75} />
-                    </div>
+        <div className="mt-20 space-y-0 divide-y divide-[var(--color-border)] border-y border-[var(--color-border)] lg:mt-28">
+          {FEATURE_BLOCKS.map((block, i) => {
+            const reverse = i % 2 === 1;
+            const anim = FEATURE_ANIM[block.id];
+            return (
+              <Reveal key={block.id}>
+                <article
+                  className={`grid items-center gap-10 py-16 lg:grid-cols-2 lg:gap-20 lg:py-24 ${
+                    reverse ? "lg:[&>*:first-child]:order-2" : ""
+                  }`}
+                >
+                  <div>
+                    <p className="text-xs font-medium tracking-[0.14em] text-[var(--color-fg-subtle)] uppercase">
+                      {block.label}
+                    </p>
+                    <h3 className="mt-4 text-2xl font-semibold tracking-[-0.025em] sm:text-3xl lg:text-[2.15rem] lg:leading-[1.2]">
+                      {block.title}
+                    </h3>
+                    <p className="mt-5 max-w-md text-lg leading-relaxed text-[var(--color-fg-muted)]">
+                      {block.body}
+                    </p>
+                    <p className="mt-6 font-mono text-xs tracking-wide text-[var(--color-fg-subtle)]">
+                      {block.detail}
+                    </p>
                   </div>
-                  <span className="border border-[var(--color-border)] px-2 py-0.5 text-xs font-medium uppercase tracking-wide text-[var(--color-fg-muted)]">
-                    {CATEGORIES[index]}
-                  </span>
-                </div>
-
-                <h3 className="font-semibold leading-snug">{feature.title}</h3>
-                <p className="mt-2 text-base leading-relaxed text-[var(--color-fg-muted)]">
-                  {feature.description}
-                </p>
-              </div>
-            </motion.article>
-          );
-        })}
+                  <div className="mx-auto flex aspect-square w-full max-w-[280px] items-center justify-center sm:max-w-[320px]">
+                    {block.id === "recovery" ? (
+                      <RecoveryGif className="w-full" />
+                    ) : (
+                      anim && (
+                        <LottiePlayer src={anim} className="h-full w-full" speed={0.85} />
+                      )
+                    )}
+                  </div>
+                </article>
+              </Reveal>
+            );
+          })}
+        </div>
       </div>
-    </Section>
+    </section>
   );
 }

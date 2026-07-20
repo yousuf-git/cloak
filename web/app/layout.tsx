@@ -1,20 +1,19 @@
 import type { Metadata } from "next";
-import { IBM_Plex_Sans, Inter, JetBrains_Mono } from "next/font/google";
+import { Geist, Instrument_Serif, JetBrains_Mono } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import { getJsonLd, siteMetadata } from "@/lib/metadata";
 import "./globals.css";
 
-const ibmPlex = IBM_Plex_Sans({
+const geist = Geist({
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-ibm-plex",
+  variable: "--font-geist",
   display: "swap",
 });
 
-const displayFont = Inter({
+const instrument = Instrument_Serif({
   subsets: ["latin"],
-  weight: ["900"],
-  variable: "--font-display",
+  weight: "400",
+  variable: "--font-instrument",
   display: "swap",
 });
 
@@ -28,10 +27,12 @@ export const metadata: Metadata = {
   ...siteMetadata,
   icons: {
     icon: [
-      { url: "/logo.svg", type: "image/svg+xml" },
-      { url: "/logo.png", type: "image/png", sizes: "512x512" },
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/favicon-16.png", type: "image/png", sizes: "16x16" },
+      { url: "/favicon-32.png", type: "image/png", sizes: "32x32" },
+      { url: "/logo.png", type: "image/png", sizes: "256x256" },
     ],
-    apple: "/apple-touch-icon.png",
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
   },
 };
 
@@ -41,13 +42,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html
       lang="en"
-      className={`${ibmPlex.variable} ${displayFont.variable} ${jetbrainsMono.variable}`}
+      className={`${geist.variable} ${instrument.variable} ${jetbrainsMono.variable}`}
       suppressHydrationWarning
     >
       <head>
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var s=localStorage.getItem('cloak-theme');var d=s==='dark'||(!s&&window.matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dark',d)}catch(e){}})();`,
+            __html: `(function(){try{var s=localStorage.getItem('cloak-theme');document.documentElement.classList.toggle('dark',s==='dark')}catch(e){}})();`,
           }}
         />
         <script
@@ -55,7 +56,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
       </head>
-      <body className="min-h-screen antialiased">
+      <body className="min-h-screen font-sans antialiased">
         <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>

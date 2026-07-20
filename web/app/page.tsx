@@ -1,15 +1,16 @@
 import { Navbar } from "@/components/layout/navbar";
 import { Footer } from "@/components/layout/footer";
 import { Hero } from "@/components/sections/hero";
-import { OverviewSection } from "@/components/sections/overview";
+import { SocialProofSection } from "@/components/sections/social-proof";
+import { ProductExperienceSection } from "@/components/sections/product-experience";
+import { WorkflowSection } from "@/components/sections/workflow";
 import { FeaturesSection } from "@/components/sections/features";
-import { ArchitectureSection } from "@/components/sections/architecture";
-import { SecuritySection, TechStackSection } from "@/components/sections/security";
-import { InstallSection, ScriptsSection, ComparisonSection } from "@/components/sections/install";
-import { DownloadSection } from "@/components/ui/download-button";
+import { WhySection } from "@/components/sections/why";
+import { TestimonialsSection } from "@/components/sections/testimonials";
+import { StatsSection } from "@/components/sections/stats";
+import { ShowcaseSection } from "@/components/sections/showcase";
 import { FAQSection } from "@/components/sections/faq-section";
-import { Section } from "@/components/ui/section";
-import { FAQ_ITEMS } from "@/content/site-content";
+import { FinalCTA } from "@/components/sections/final-cta";
 import { detectPlatform, getDownloadUrl, getGitHubData } from "@/lib/github";
 import { headers } from "next/headers";
 
@@ -25,21 +26,16 @@ export default async function HomePage() {
       <Navbar downloadHref={download.url} repo={github.repo} />
       <main>
         <Hero release={github.latestRelease} />
-
-        <OverviewSection />
+        <SocialProofSection />
+        <ProductExperienceSection />
+        <WorkflowSection />
         <FeaturesSection />
-        <ArchitectureSection />
-        <SecuritySection />
-        <TechStackSection />
-        <InstallSection />
-        <ScriptsSection />
-        <ComparisonSection />
-
-        <Section id="download" label="Download" title="Get Cloak" alt accent>
-          <DownloadSection release={github.latestRelease} />
-        </Section>
-
-        <FAQSection items={FAQ_ITEMS} />
+        <WhySection />
+        <TestimonialsSection />
+        <StatsSection />
+        <ShowcaseSection />
+        <FAQSection />
+        <FinalCTA release={github.latestRelease} />
       </main>
       <Footer />
     </>

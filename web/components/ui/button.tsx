@@ -14,16 +14,16 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variants: Record<ButtonVariant, string> = {
   primary:
-    "bg-brand-600 text-white hover:bg-brand-700 border border-brand-700 dark:bg-brand-600 dark:hover:bg-brand-700",
+    "bg-[var(--color-fg)] text-[var(--color-bg)] hover:bg-brand-600 dark:hover:bg-brand-400",
   secondary:
-    "bg-[var(--color-bg)] text-[var(--color-fg)] border border-[var(--color-border-strong)] hover:bg-[var(--color-surface)]",
-  ghost: "bg-transparent text-[var(--color-fg-muted)] hover:text-[var(--color-fg)] hover:underline",
+    "bg-transparent text-[var(--color-fg)] border border-[var(--color-border-strong)] hover:border-[var(--color-fg)]",
+  ghost: "bg-transparent text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]",
 };
 
 const sizes: Record<ButtonSize, string> = {
-  sm: "h-10 px-4 text-base",
-  md: "h-11 px-5 text-base",
-  lg: "h-12 px-6 text-lg",
+  sm: "h-9 px-4 text-sm",
+  md: "h-11 px-5 text-[0.9375rem]",
+  lg: "h-12 px-7 text-base",
 };
 
 export function Button({
@@ -37,7 +37,7 @@ export function Button({
   ...props
 }: ButtonProps) {
   const classes = cn(
-    "inline-flex items-center justify-center gap-2 rounded-[var(--radius-md)] font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500",
+    "inline-flex items-center justify-center gap-2 rounded-full font-medium tracking-tight transition-colors duration-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500",
     variants[variant],
     sizes[size],
     className,
