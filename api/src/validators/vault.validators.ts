@@ -36,6 +36,40 @@ export const apiKeyCreateSchema = z.object({
 });
 export const apiKeyUpdateSchema = apiKeyCreateSchema.partial();
 
+// ---- Access Keys (access key ID + secret access key) ----
+export const accessKeyCreateSchema = z.object({
+  title: shortText,
+  access_key_id: z.string().trim().min(1).max(512), // plaintext — searchable, not a secret
+  secret_access_key: cipher,
+  note: optionalText,
+  project_id: objectId.optional(),
+});
+export const accessKeyUpdateSchema = accessKeyCreateSchema.partial();
+
+// ---- SSH Keys (import-only) ----
+const sshKeyType = z.enum(['RSA', 'ED25519']);
+const sshKeyFormat = z.enum(['PEM', 'PPK']);
+const keyBlob = z.string().min(1).max(65_536); // encrypted key file — larger than a field cipher
+
+export const sshKeyCreateSchema = z.object({
+  title: shortText,
+  key_type: sshKeyType,
+  format: sshKeyFormat,
+  comment: optionalText,
+  private_key: keyBlob,
+  note: optionalText,
+  project_id: objectId.optional(),
+});
+// Import-only: the key material/type/format are fixed once imported — only
+// metadata (title, comment, note) is editable.
+export const sshKeyUpdateSchema = z
+  .object({
+    title: shortText.optional(),
+    comment: optionalText,
+    note: optionalText,
+  })
+  .refine((d) => Object.keys(d).length > 0, { message: 'No fields to update' });
+
 // ---- Platforms + backup codes ----
 export const platformCreateSchema = z.object({
   name: shortText,

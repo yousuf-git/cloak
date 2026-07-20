@@ -9,6 +9,10 @@ import {
   credUpdateSchema,
   apiKeyCreateSchema,
   apiKeyUpdateSchema,
+  accessKeyCreateSchema,
+  accessKeyUpdateSchema,
+  sshKeyCreateSchema,
+  sshKeyUpdateSchema,
   platformCreateSchema,
   platformUpdateSchema,
   backupCodesAddSchema,
@@ -34,6 +38,18 @@ vaultRouter.get('/api-keys', v.listApiKeys);
 vaultRouter.post('/api-keys', validate({ body: apiKeyCreateSchema }), v.createApiKey);
 vaultRouter.patch('/api-keys/:id', validate({ params: idParamSchema, body: apiKeyUpdateSchema }), v.updateApiKey);
 vaultRouter.delete('/api-keys/:id', validate({ params: idParamSchema }), v.deleteApiKey);
+
+// Access keys (access key ID + secret access key)
+vaultRouter.get('/access-keys', v.listAccessKeys);
+vaultRouter.post('/access-keys', validate({ body: accessKeyCreateSchema }), v.createAccessKey);
+vaultRouter.patch('/access-keys/:id', validate({ params: idParamSchema, body: accessKeyUpdateSchema }), v.updateAccessKey);
+vaultRouter.delete('/access-keys/:id', validate({ params: idParamSchema }), v.deleteAccessKey);
+
+// SSH keys (import-only)
+vaultRouter.get('/ssh-keys', v.listSshKeys);
+vaultRouter.post('/ssh-keys', validate({ body: sshKeyCreateSchema }), v.createSshKey);
+vaultRouter.patch('/ssh-keys/:id', validate({ params: idParamSchema, body: sshKeyUpdateSchema }), v.updateSshKey);
+vaultRouter.delete('/ssh-keys/:id', validate({ params: idParamSchema }), v.deleteSshKey);
 
 // Platforms + backup codes
 vaultRouter.get('/platforms', v.listPlatforms);

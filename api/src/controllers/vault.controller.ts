@@ -51,6 +51,42 @@ export const deleteApiKey = asyncHandler(async (req: Request, res: Response) => 
   ok(res, { success: true });
 });
 
+// ---------- Access Keys ----------
+export const listAccessKeys = asyncHandler(async (req, res) => ok(res, await vault.listAccessKeys(uid(req))));
+export const createAccessKey = asyncHandler(async (req: Request, res: Response) => {
+  const doc = await vault.createAccessKey(uid(req), req.body);
+  await recordAudit({ action: 'accesskey:create', userId: uid(req), resource: 'AccessKey', resourceId: doc.id, req });
+  created(res, doc);
+});
+export const updateAccessKey = asyncHandler(async (req: Request, res: Response) => {
+  const doc = await vault.updateAccessKey(uid(req), param(req, 'id'), req.body);
+  await recordAudit({ action: 'accesskey:update', userId: uid(req), resource: 'AccessKey', resourceId: param(req, 'id'), req });
+  ok(res, doc);
+});
+export const deleteAccessKey = asyncHandler(async (req: Request, res: Response) => {
+  await vault.deleteAccessKey(uid(req), param(req, 'id'));
+  await recordAudit({ action: 'accesskey:delete', userId: uid(req), resource: 'AccessKey', resourceId: param(req, 'id'), req });
+  ok(res, { success: true });
+});
+
+// ---------- SSH Keys ----------
+export const listSshKeys = asyncHandler(async (req, res) => ok(res, await vault.listSshKeys(uid(req))));
+export const createSshKey = asyncHandler(async (req: Request, res: Response) => {
+  const doc = await vault.createSshKey(uid(req), req.body);
+  await recordAudit({ action: 'sshkey:create', userId: uid(req), resource: 'SshKey', resourceId: doc.id, req });
+  created(res, doc);
+});
+export const updateSshKey = asyncHandler(async (req: Request, res: Response) => {
+  const doc = await vault.updateSshKey(uid(req), param(req, 'id'), req.body);
+  await recordAudit({ action: 'sshkey:update', userId: uid(req), resource: 'SshKey', resourceId: param(req, 'id'), req });
+  ok(res, doc);
+});
+export const deleteSshKey = asyncHandler(async (req: Request, res: Response) => {
+  await vault.deleteSshKey(uid(req), param(req, 'id'));
+  await recordAudit({ action: 'sshkey:delete', userId: uid(req), resource: 'SshKey', resourceId: param(req, 'id'), req });
+  ok(res, { success: true });
+});
+
 // ---------- Platforms + backup codes ----------
 export const listPlatforms = asyncHandler(async (req, res) => ok(res, await vault.listPlatforms(uid(req))));
 export const createPlatform = asyncHandler(async (req: Request, res: Response) => {

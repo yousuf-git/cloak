@@ -1,6 +1,8 @@
 import type { Types } from 'mongoose';
 import { Cred } from '../models/cred.model.js';
 import { ApiKey } from '../models/api-key.model.js';
+import { AccessKey } from '../models/access-key.model.js';
+import { SshKey } from '../models/ssh-key.model.js';
 import { Platform } from '../models/platform.model.js';
 import { User } from '../models/user.model.js';
 import { NotFoundError } from '../lib/errors.js';
@@ -45,6 +47,46 @@ export async function updateApiKey(userId: Owner, id: string, data: Record<strin
 export async function deleteApiKey(userId: Owner, id: string) {
   const res = await ApiKey.deleteOne({ _id: id, user_id: userId });
   if (res.deletedCount === 0) throw new NotFoundError('API key not found');
+}
+
+// ---------- Access Keys ----------
+export function listAccessKeys(userId: Owner) {
+  return AccessKey.find({ user_id: userId }).sort({ created_at: -1 }).lean();
+}
+
+export function createAccessKey(userId: Owner, data: Record<string, unknown>) {
+  return AccessKey.create({ ...data, user_id: userId });
+}
+
+export async function updateAccessKey(userId: Owner, id: string, data: Record<string, unknown>) {
+  const doc = await AccessKey.findOneAndUpdate({ _id: id, user_id: userId }, { $set: data }, { new: true });
+  if (!doc) throw new NotFoundError('Access key not found');
+  return doc;
+}
+
+export async function deleteAccessKey(userId: Owner, id: string) {
+  const res = await AccessKey.deleteOne({ _id: id, user_id: userId });
+  if (res.deletedCount === 0) throw new NotFoundError('Access key not found');
+}
+
+// ---------- SSH Keys ----------
+export function listSshKeys(userId: Owner) {
+  return SshKey.find({ user_id: userId }).sort({ created_at: -1 }).lean();
+}
+
+export function createSshKey(userId: Owner, data: Record<string, unknown>) {
+  return SshKey.create({ ...data, user_id: userId });
+}
+
+export async function updateSshKey(userId: Owner, id: string, data: Record<string, unknown>) {
+  const doc = await SshKey.findOneAndUpdate({ _id: id, user_id: userId }, { $set: data }, { new: true });
+  if (!doc) throw new NotFoundError('SSH key not found');
+  return doc;
+}
+
+export async function deleteSshKey(userId: Owner, id: string) {
+  const res = await SshKey.deleteOne({ _id: id, user_id: userId });
+  if (res.deletedCount === 0) throw new NotFoundError('SSH key not found');
 }
 
 // ---------- Platforms + backup codes ----------
