@@ -1,5 +1,28 @@
 import { SITE } from "@/constants/site";
 
+function getSiteOrigin(): string {
+  const explicit = process.env.NEXT_PUBLIC_SITE_URL;
+  if (explicit) return explicit.replace(/\/$/, "");
+
+  const vercel =
+    process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL;
+  if (vercel) return `https://${vercel.replace(/^https?:\/\//, "")}`;
+
+  return SITE.url;
+}
+
+function getMetadataBase(): URL {
+  return new URL(getSiteOrigin());
+}
+
+const ogImage = {
+  url: "/og.png",
+  width: 1200,
+  height: 630,
+  alt: "Cloak — Secrets that never leave your machine",
+  type: "image/png",
+} as const;
+
 export const siteMetadata = {
   title: {
     default: "Cloak — Zero-Knowledge Secrets for Developers",
@@ -20,20 +43,22 @@ export const siteMetadata = {
   ],
   authors: [{ name: SITE.author, url: SITE.repo }],
   creator: SITE.author,
-  metadataBase: new URL(SITE.url),
+  metadataBase: getMetadataBase(),
   openGraph: {
-    type: "website",
+    type: "website" as const,
     locale: "en_US",
-    url: SITE.url,
+    url: "/",
     siteName: SITE.name,
     title: "Cloak — Zero-Knowledge Secrets for Developers",
     description: SITE.description,
+    images: [ogImage],
   },
   twitter: {
     card: "summary_large_image" as const,
     title: "Cloak — Zero-Knowledge Secrets for Developers",
     description: SITE.description,
     creator: `@${SITE.author}`,
+    images: ["/og.png"],
   },
   robots: {
     index: true,
@@ -46,7 +71,7 @@ export const siteMetadata = {
     },
   },
   alternates: {
-    canonical: SITE.url,
+    canonical: "/",
   },
 };
 
@@ -66,5 +91,6 @@ export function getJsonLd() {
     license: "https://opensource.org/licenses/MIT",
     codeRepository: SITE.repo,
     programmingLanguage: ["TypeScript", "Rust"],
+    image: ogImage.url,
   };
 }
