@@ -1,5 +1,12 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { vaultApi, type CredDto, type ApiKeyDto, type ProjectDto } from '@/lib/api';
+import {
+  vaultApi,
+  type CredDto,
+  type ApiKeyDto,
+  type AccessKeyDto,
+  type SshKeyDto,
+  type ProjectDto,
+} from '@/lib/api';
 import { useAppMode } from '@/stores/app-mode';
 import { useSandboxData } from '@/stores/sandbox-data';
 
@@ -81,6 +88,89 @@ export function useApiKeys() {
     },
     remove: async (id: string) => {
       await vaultApi.deleteApiKey(id);
+      await invalidate();
+    },
+  };
+}
+
+// ---------------- Access Keys ----------------
+export function useAccessKeys() {
+  const sandbox = useAppMode((s) => s.sandbox);
+  const qc = useQueryClient();
+  const sb = useSandboxData();
+
+  const query = useQuery({
+    queryKey: ['access-keys'],
+    queryFn: vaultApi.listAccessKeys,
+    enabled: !sandbox,
+  });
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['access-keys'] });
+
+  if (sandbox) {
+    return {
+      items: sb.accessKeys,
+      isLoading: false,
+      create: async (b: Partial<AccessKeyDto>) => sb.addAccessKey(b),
+      update: async (id: string, b: Partial<AccessKeyDto>) => sb.updateAccessKey(id, b),
+      remove: async (id: string) => sb.removeAccessKey(id),
+    };
+  }
+
+  return {
+    items: query.data ?? [],
+    isLoading: query.isLoading,
+    create: async (b: Partial<AccessKeyDto>) => {
+      await vaultApi.createAccessKey(b);
+      await invalidate();
+    },
+    update: async (id: string, b: Partial<AccessKeyDto>) => {
+      await vaultApi.updateAccessKey(id, b);
+      await invalidate();
+    },
+    remove: async (id: string) => {
+      await vaultApi.deleteAccessKey(id);
+      await invalidate();
+    },
+  };
+}
+
+// ---------------- SSH Keys ----------------
+export function useSshKeys() {
+  const sandbox = useAppMode((s) => s.sandbox);
+  const qc = useQueryClient();
+  const sb = useSandboxData();
+
+  const query = useQuery({
+    queryKey: ['ssh-keys'],
+    queryFn: vaultApi.listSshKeys,
+    enabled: !sandbox,
+  });
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['ssh-keys'] });
+
+  if (sandbox) {
+    return {
+      items: sb.sshKeys,
+      isLoading: false,
+      create: async (b: Partial<SshKeyDto>) => sb.addSshKey(b),
+      update: async (id: string, b: { title?: string; comment?: string; note?: string }) =>
+        sb.updateSshKey(id, b),
+      remove: async (id: string) => sb.removeSshKey(id),
+    };
+  }
+
+  return {
+    items: query.data ?? [],
+    isLoading: query.isLoading,
+    create: async (b: Partial<SshKeyDto>) => {
+      await vaultApi.createSshKey(b);
+      await invalidate();
+    },
+    update: async (id: string, b: { title?: string; comment?: string; note?: string }) => {
+      await vaultApi.updateSshKey(id, b);
+      await invalidate();
+    },
+    remove: async (id: string) => {
+      await vaultApi.deleteSshKey(id);
       await invalidate();
     },
   };

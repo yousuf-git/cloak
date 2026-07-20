@@ -3,6 +3,8 @@ import { AnimatePresence, motion } from 'framer-motion';
 import {
   ShieldCheck,
   KeyRound,
+  KeySquare,
+  TerminalSquare,
   FileLock2,
   LifeBuoy,
   FolderLock,
@@ -20,9 +22,19 @@ import { CredentialsPage } from '@/pages/CredentialsPage';
 import { EnvFilesPage } from '@/pages/EnvFilesPage';
 import { BackupCodesPage } from '@/pages/BackupCodesPage';
 import { ApiKeysPage } from '@/pages/ApiKeysPage';
+import { AccessKeysPage } from '@/pages/AccessKeysPage';
+import { SshKeysPage } from '@/pages/SshKeysPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 
-type PageId = 'projects' | 'credentials' | 'env' | 'backup' | 'api-keys' | 'settings';
+type PageId =
+  | 'projects'
+  | 'credentials'
+  | 'env'
+  | 'backup'
+  | 'api-keys'
+  | 'access-keys'
+  | 'ssh-keys'
+  | 'settings';
 
 interface NavItem {
   id: PageId;
@@ -37,6 +49,8 @@ const NAV: NavItem[] = [
   { id: 'env', label: 'Env Files', icon: FileLock2, placeholder: 'Search env files…' },
   { id: 'backup', label: 'Backup Codes', icon: LifeBuoy, placeholder: 'Search platforms…' },
   { id: 'api-keys', label: 'API Keys', icon: ShieldCheck, placeholder: 'Search API keys…' },
+  { id: 'access-keys', label: 'Access Keys', icon: KeySquare, placeholder: 'Search access keys…' },
+  { id: 'ssh-keys', label: 'SSH Keys', icon: TerminalSquare, placeholder: 'Search SSH keys…' },
 ];
 
 const PAGES: Record<PageId, React.ComponentType> = {
@@ -45,6 +59,8 @@ const PAGES: Record<PageId, React.ComponentType> = {
   env: EnvFilesPage,
   backup: BackupCodesPage,
   'api-keys': ApiKeysPage,
+  'access-keys': AccessKeysPage,
+  'ssh-keys': SshKeysPage,
   settings: SettingsPage,
 };
 

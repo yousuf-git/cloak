@@ -1,8 +1,19 @@
 import { create } from 'zustand';
-import type { CredDto, ApiKeyDto, PlatformDto, ProjectDto, EnvFileDto, EnvTag } from '@/lib/api';
+import type {
+  CredDto,
+  ApiKeyDto,
+  AccessKeyDto,
+  SshKeyDto,
+  PlatformDto,
+  ProjectDto,
+  EnvFileDto,
+  EnvTag,
+} from '@/lib/api';
 import {
   sampleCredentials,
   sampleApiKeys,
+  sampleAccessKeys,
+  sampleSshKeys,
   samplePlatforms,
   sampleProjects,
 } from '@/lib/sample-data';
@@ -26,6 +37,8 @@ const now = () => new Date().toISOString();
 interface SandboxState {
   creds: CredDto[];
   apiKeys: ApiKeyDto[];
+  accessKeys: AccessKeyDto[];
+  sshKeys: SshKeyDto[];
   platforms: PlatformDto[];
   projects: ProjectDto[];
 
@@ -36,6 +49,14 @@ interface SandboxState {
   addApiKey: (k: Partial<ApiKeyDto>) => void;
   updateApiKey: (id: string, k: Partial<ApiKeyDto>) => void;
   removeApiKey: (id: string) => void;
+
+  addAccessKey: (k: Partial<AccessKeyDto>) => void;
+  updateAccessKey: (id: string, k: Partial<AccessKeyDto>) => void;
+  removeAccessKey: (id: string) => void;
+
+  addSshKey: (k: Partial<SshKeyDto>) => void;
+  updateSshKey: (id: string, k: { title?: string; comment?: string; note?: string }) => void;
+  removeSshKey: (id: string) => void;
 
   addPlatform: (name: string, note: string | undefined, codes: string[]) => void;
   removePlatform: (id: string) => void;
@@ -74,6 +95,28 @@ const seedApiKeys: ApiKeyDto[] = sampleApiKeys.map((k) => ({
   label: k.label,
   url: k.url,
   key: sbEncrypt(k.key),
+  note: k.note,
+  created_at: now(),
+  updated_at: now(),
+}));
+
+const seedAccessKeys: AccessKeyDto[] = sampleAccessKeys.map((k) => ({
+  _id: k.id,
+  title: k.title,
+  access_key_id: k.accessKeyId, // plaintext — searchable identifier
+  secret_access_key: sbEncrypt(k.secretAccessKey),
+  note: k.note,
+  created_at: now(),
+  updated_at: now(),
+}));
+
+const seedSshKeys: SshKeyDto[] = sampleSshKeys.map((k) => ({
+  _id: k.id,
+  title: k.title,
+  key_type: k.keyType,
+  format: k.format,
+  comment: k.comment,
+  private_key: sbEncrypt(k.privateKey),
   note: k.note,
   created_at: now(),
   updated_at: now(),
@@ -124,6 +167,8 @@ const seedEnvFiles: SandboxEnvFile[] = sampleProjects.flatMap((p) =>
 export const useSandboxData = create<SandboxState>((set) => ({
   creds: seedCreds,
   apiKeys: seedApiKeys,
+  accessKeys: seedAccessKeys,
+  sshKeys: seedSshKeys,
   platforms: seedPlatforms,
   projects: seedProjects,
 
@@ -165,6 +210,50 @@ export const useSandboxData = create<SandboxState>((set) => ({
   updateApiKey: (id, k) =>
     set((s) => ({ apiKeys: s.apiKeys.map((x) => (x._id === id ? { ...x, ...k, updated_at: now() } : x)) })),
   removeApiKey: (id) => set((s) => ({ apiKeys: s.apiKeys.filter((x) => x._id !== id) })),
+
+  addAccessKey: (k) =>
+    set((s) => ({
+      accessKeys: [
+        {
+          _id: nextId(),
+          title: k.title ?? 'Untitled',
+          access_key_id: k.access_key_id ?? '',
+          secret_access_key: k.secret_access_key ?? '',
+          note: k.note,
+          created_at: now(),
+          updated_at: now(),
+        },
+        ...s.accessKeys,
+      ],
+    })),
+  updateAccessKey: (id, k) =>
+    set((s) => ({
+      accessKeys: s.accessKeys.map((x) => (x._id === id ? { ...x, ...k, updated_at: now() } : x)),
+    })),
+  removeAccessKey: (id) => set((s) => ({ accessKeys: s.accessKeys.filter((x) => x._id !== id) })),
+
+  addSshKey: (k) =>
+    set((s) => ({
+      sshKeys: [
+        {
+          _id: nextId(),
+          title: k.title ?? 'Untitled',
+          key_type: k.key_type ?? 'RSA',
+          format: k.format ?? 'PEM',
+          comment: k.comment,
+          private_key: k.private_key ?? '',
+          note: k.note,
+          created_at: now(),
+          updated_at: now(),
+        },
+        ...s.sshKeys,
+      ],
+    })),
+  updateSshKey: (id, k) =>
+    set((s) => ({
+      sshKeys: s.sshKeys.map((x) => (x._id === id ? { ...x, ...k, updated_at: now() } : x)),
+    })),
+  removeSshKey: (id) => set((s) => ({ sshKeys: s.sshKeys.filter((x) => x._id !== id) })),
 
   addPlatform: (name, note, codes) =>
     set((s) => ({

@@ -226,6 +226,33 @@ export interface ApiKeyDto {
   updated_at: string;
 }
 
+export interface AccessKeyDto {
+  _id: string;
+  title: string;
+  access_key_id: string; // plaintext — searchable
+  secret_access_key: string; // ciphertext
+  note?: string;
+  project_id?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export type SshKeyType = 'RSA' | 'ED25519';
+export type SshKeyFormat = 'PEM' | 'PPK';
+
+export interface SshKeyDto {
+  _id: string;
+  title: string;
+  key_type: SshKeyType;
+  format: SshKeyFormat;
+  comment?: string;
+  private_key: string; // ciphertext
+  note?: string;
+  project_id?: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface BackupCodeDto {
   _id: string;
   encrypted_code: string;
@@ -265,6 +292,22 @@ export const vaultApi = {
     apiRequest<ApiKeyDto>(`/vault/api-keys/${id}`, { method: 'PATCH', body, auth: true }),
   deleteApiKey: (id: string) =>
     apiRequest<{ success: boolean }>(`/vault/api-keys/${id}`, { method: 'DELETE', auth: true }),
+
+  listAccessKeys: () => apiRequest<AccessKeyDto[]>('/vault/access-keys', { auth: true }),
+  createAccessKey: (body: Partial<AccessKeyDto>) =>
+    apiRequest<AccessKeyDto>('/vault/access-keys', { method: 'POST', body, auth: true }),
+  updateAccessKey: (id: string, body: Partial<AccessKeyDto>) =>
+    apiRequest<AccessKeyDto>(`/vault/access-keys/${id}`, { method: 'PATCH', body, auth: true }),
+  deleteAccessKey: (id: string) =>
+    apiRequest<{ success: boolean }>(`/vault/access-keys/${id}`, { method: 'DELETE', auth: true }),
+
+  listSshKeys: () => apiRequest<SshKeyDto[]>('/vault/ssh-keys', { auth: true }),
+  createSshKey: (body: Partial<SshKeyDto>) =>
+    apiRequest<SshKeyDto>('/vault/ssh-keys', { method: 'POST', body, auth: true }),
+  updateSshKey: (id: string, body: { title?: string; comment?: string; note?: string }) =>
+    apiRequest<SshKeyDto>(`/vault/ssh-keys/${id}`, { method: 'PATCH', body, auth: true }),
+  deleteSshKey: (id: string) =>
+    apiRequest<{ success: boolean }>(`/vault/ssh-keys/${id}`, { method: 'DELETE', auth: true }),
 
   listPlatforms: () => apiRequest<PlatformDto[]>('/vault/platforms', { auth: true }),
   createPlatform: (body: { name: string; note?: string; backup_codes?: { encrypted_code: string }[] }) =>

@@ -102,6 +102,62 @@ export const sampleApiKeys: SampleApiKey[] = [
   { id: 'k3', label: 'Resend', url: 'resend.com', key: 're_8dKq2Lm_pWx9Zv', note: 'Transactional email' },
 ];
 
+export interface SampleAccessKey {
+  id: string;
+  title: string;
+  accessKeyId: string;
+  secretAccessKey: string;
+  note?: string;
+}
+
+export const sampleAccessKeys: SampleAccessKey[] = [
+  {
+    id: 'ak1',
+    title: 'AWS — Deploy Bot',
+    accessKeyId: 'AKIAIOSFODNN7EXAMPLE',
+    secretAccessKey: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
+    note: 'CI deploy user',
+  },
+  {
+    id: 'ak2',
+    title: 'AWS — S3 Backups',
+    accessKeyId: 'AKIAI44QH8DHBEXAMPLE',
+    secretAccessKey: 'je7MtGbClwBF/2Zp9Utk/h3yCo8nvbEXAMPLEKEY',
+  },
+];
+
+export interface SampleSshKey {
+  id: string;
+  title: string;
+  keyType: 'RSA' | 'ED25519';
+  format: 'PEM' | 'PPK';
+  comment?: string;
+  privateKey: string;
+  note?: string;
+}
+
+export const sampleSshKeys: SampleSshKey[] = [
+  {
+    id: 'sk1',
+    title: 'prod-web (ED25519)',
+    keyType: 'ED25519',
+    format: 'PEM',
+    comment: 'imported-openssh-key',
+    privateKey:
+      '-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtEXAMPLE\n-----END OPENSSH PRIVATE KEY-----\n',
+    note: 'EC2 bastion host',
+  },
+  {
+    id: 'sk2',
+    title: 'legacy-box (RSA/PuTTY)',
+    keyType: 'RSA',
+    format: 'PPK',
+    comment: 'imported-openssh-key',
+    privateKey:
+      'PuTTY-User-Key-File-2: ssh-rsa\nEncryption: none\nComment: imported-openssh-key\nPublic-Lines: 4\nAAAAB3NzaC1yc2EEXAMPLE\nPrivate-Lines: 8\nAAABAExAmPlEpRiVaTeLiNeS\nPrivate-MAC: 0000000000000000000000000000000000000000\n',
+  },
+];
+
 export interface SampleBackupCode {
   id: string;
   code: string;
