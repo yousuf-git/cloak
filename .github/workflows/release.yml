@@ -1,0 +1,76 @@
+name: release
+
+# On-demand only: builds + publishes a GitHub Release when a version tag is
+# pushed (e.g. `git tag v0.2.0 && git push origin v0.2.0`). Ordinary commits to
+# main build nothing. See docs/DISTRIBUTION.md.
+on:
+  push:
+    tags:
+      - 'v*'
+
+# Never run two release builds for the same tag at once.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    permissions:
+      contents: write # create the release + upload assets
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # One universal .dmg (Intel + Apple Silicon). The site's asset matcher
+          # picks the first .dmg, and browsers can't reliably detect Mac arch —
+          # a single universal binary sidesteps both problems.
+          - platform: macos-latest
+            args: '--target universal-apple-darwin'
+          - platform: ubuntu-22.04
+            args: ''
+          - platform: windows-latest
+            args: ''
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux build dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+
+      # Installs every workspace (api/desktop/web); the desktop build only needs
+      # its own deps, but pnpm resolves the whole workspace at once.
+      - run: pnpm install --frozen-lockfile
+
+      - uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: desktop
+          tagName: ${{ github.ref_name }}
+          releaseName: Cloak ${{ github.ref_name }}
+          releaseDraft: false
+          prerelease: false
+          generateReleaseNotes: true
+          args: ${{ matrix.args }}
