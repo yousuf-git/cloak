@@ -2,11 +2,8 @@
 
 import { useRef } from "react";
 import { motion, useScroll, useTransform } from "motion/react";
-import { Github } from "lucide-react";
-import { SITE } from "@/constants/site";
 import { HERO, TRUST_LINE } from "@/content/site-content";
 import { DownloadRow } from "@/components/ui/download-button";
-import { MagneticButton } from "@/components/ui/magnetic-button";
 import { LOTTIE_ONCE } from "@/lib/lottie-once";
 import { LottiePlayer } from "@/components/ui/lottie-player";
 import { usePrefersReducedMotion } from "@/hooks/use-platform";
@@ -71,15 +68,6 @@ export function Hero({ release }: HeroProps) {
               className="mt-7 flex w-full flex-col items-center gap-4 lg:items-start"
             >
               <DownloadRow release={release} className="flex flex-col items-center lg:items-start" />
-              <MagneticButton
-                href={SITE.repo}
-                variant="ghost"
-                size="md"
-                external
-              >
-                <Github className="h-4 w-4" />
-                View on GitHub
-              </MagneticButton>
             </motion.div>
 
             <motion.p

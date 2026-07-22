@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Menu, X } from "lucide-react";
+import { ArrowRight, Github, Menu, X } from "lucide-react";
 import { motion, useScroll, useMotionValueEvent } from "motion/react";
 import { NAV_LINKS, SITE } from "@/constants/site";
 import { ThemeToggle } from "@/components/theme-provider";
@@ -13,11 +13,10 @@ import { cn } from "@/lib/utils";
 import type { GitHubRepoStats } from "@/types/github";
 
 interface NavbarProps {
-  downloadHref: string;
   repo: GitHubRepoStats | null;
 }
 
-export function Navbar({ downloadHref, repo }: NavbarProps) {
+export function Navbar({ repo }: NavbarProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const { scrollY } = useScroll();
@@ -62,28 +61,20 @@ export function Navbar({ downloadHref, repo }: NavbarProps) {
               <Link
                 key={link.href}
                 href={link.href}
-                className="link-underline px-3 py-2 text-[0.9375rem] text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]"
+                className="link-underline inline-flex items-center gap-1 px-3 py-2 text-[0.9375rem] text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]"
               >
                 {link.label}
+                {link.label === "Download" && <ArrowRight className="h-3.5 w-3.5" />}
               </Link>
             ))}
           </div>
         </div>
 
         <div className="hidden items-center gap-3 lg:flex">
-          {repo && (
-            <a
-              href={SITE.repo}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-mono text-sm text-[var(--color-fg-subtle)] transition-colors hover:text-[var(--color-fg)]"
-            >
-              ★ {formatNumber(repo.stars)}
-            </a>
-          )}
           <ThemeToggle />
-          <MagneticButton href={downloadHref} size="md">
-            Download
+          <MagneticButton href={SITE.repo} size="md" external>
+            <Github className="h-4 w-4" />
+            Open Source
           </MagneticButton>
         </div>
 
@@ -117,11 +108,9 @@ export function Navbar({ downloadHref, repo }: NavbarProps) {
             </Link>
           ))}
           <div className="mt-6 flex gap-3 border-t border-[var(--color-border)] pt-6">
-            <MagneticButton href={SITE.repo} variant="secondary" size="md" external className="flex-1">
-              GitHub
-            </MagneticButton>
-            <MagneticButton href={downloadHref} size="md" className="flex-1">
-              Download
+            <MagneticButton href={SITE.repo} size="md" external className="flex-1">
+              <Github className="h-4 w-4" />
+              Open Source
             </MagneticButton>
           </div>
         </motion.div>

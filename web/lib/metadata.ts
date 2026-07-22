@@ -19,13 +19,13 @@ const ogImage = {
   url: "/og.png",
   width: 1200,
   height: 630,
-  alt: "Cloak — Secrets that never leave your machine",
+  alt: "Cloak - Secrets that never leave your machine",
   type: "image/png",
 } as const;
 
 export const siteMetadata = {
   title: {
-    default: "Cloak — Zero-Knowledge Secrets for Developers",
+    default: "Cloak - Zero-Knowledge Secrets for Developers",
     template: "%s · Cloak",
   },
   description: SITE.description,
@@ -49,13 +49,13 @@ export const siteMetadata = {
     locale: "en_US",
     url: "/",
     siteName: SITE.name,
-    title: "Cloak — Zero-Knowledge Secrets for Developers",
+    title: "Cloak - Zero-Knowledge Secrets for Developers",
     description: SITE.description,
     images: [ogImage],
   },
   twitter: {
     card: "summary_large_image" as const,
-    title: "Cloak — Zero-Knowledge Secrets for Developers",
+    title: "Cloak - Zero-Knowledge Secrets for Developers",
     description: SITE.description,
     creator: `@${SITE.author}`,
     images: ["/og.png"],

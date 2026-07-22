@@ -101,37 +101,68 @@ export function detectPlatform(userAgent: string): PlatformId {
   return "unknown";
 }
 
+export interface VariantDownload {
+  variant: { id: string; label: string };
+  asset: GitHubRelease["assets"][number];
+}
+
+/**
+ * Downloadable installers for a platform, in the priority order declared in
+ * PLATFORMS. Matching walks variants (not the release's asset list) so the
+ * default never depends on GitHub's nondeterministic asset ordering.
+ */
+export function platformDownloads(
+  release: GitHubRelease | null,
+  platform: PlatformId,
+): VariantDownload[] {
+  if (!release || platform === "unknown") return [];
+
+  const config = PLATFORMS.find((item) => item.id === platform);
+  if (!config) return [];
+
+  const downloads: VariantDownload[] = [];
+  for (const variant of config.variants) {
+    const asset = release.assets.find((a) => variant.pattern.test(a.name));
+    if (asset) downloads.push({ variant, asset });
+  }
+  return downloads;
+}
+
+/** The default (highest-priority) installer asset for a platform. */
 export function findAssetForPlatform(
   release: GitHubRelease | null,
   platform: PlatformId,
 ) {
-  if (!release || platform === "unknown") return null;
-
-  const config = PLATFORMS.find((item) => item.id === platform);
-  if (!config) return null;
-
-  return (
-    release.assets.find((asset) => config.assetPattern.test(asset.name)) ?? null
-  );
+  return platformDownloads(release, platform)[0]?.asset ?? null;
 }
+
+export type DownloadKind = "asset" | "picker" | "source";
 
 export function getDownloadUrl(
   release: GitHubRelease | null,
   platform: PlatformId,
-): { url: string; filename: string | null; isSourceBuild: boolean } {
+): { url: string; filename: string | null; kind: DownloadKind; isSourceBuild: boolean } {
   const asset = findAssetForPlatform(release, platform);
 
   if (asset) {
     return {
       url: asset.browserDownloadUrl,
       filename: asset.name,
+      kind: "asset",
       isSourceBuild: false,
     };
+  }
+
+  // A release exists but the platform is unknown — send the visitor to the
+  // download page to pick a platform instead of dumping them on GitHub.
+  if (release && platform === "unknown") {
+    return { url: "/download", filename: null, kind: "picker", isSourceBuild: false };
   }
 
   return {
     url: `${SITE.repo}#getting-started`,
     filename: null,
+    kind: "source",
     isSourceBuild: true,
   };
 }
