@@ -2,24 +2,37 @@ export const HERO = {
   brand: "Cloak",
   headline: "Secrets that never leave your machine.",
   subhead:
-    "A zero-knowledge desktop vault for credentials, API keys, and encrypted .env files. Sync convenience. Local cryptography. Opaque cloud storage.",
+    "A zero-knowledge desktop vault for credentials, API keys, SSH keys, and encrypted .env files. Sync convenience. Local cryptography. Opaque cloud storage.",
 } as const;
 
 export const TRUST_LINE = "Native for Windows, macOS, and Linux · MIT open source" as const;
 
 export const SOCIAL_PROOF = {
   label: "Built for the stack you already trust",
-  logos: ["Tauri 2", "Rust", "React 19", "Argon2id", "XChaCha20", "dotenvx"],
+  // `icon` keys into the map in social-proof.tsx (brand marks + lucide glyphs
+  // for the crypto primitives, which have no brand).
+  logos: [
+    { icon: "tauri", label: "Tauri 2" },
+    { icon: "rust", label: "Rust" },
+    { icon: "react", label: "React 19" },
+    { icon: "argon2", label: "Argon2id" },
+    { icon: "xchacha", label: "XChaCha20" },
+    { icon: "dotenv", label: "dotenvx" },
+  ],
 } as const;
 
 export const PRODUCT_EXPERIENCE = {
   label: "Product",
-  title: "One vault. Five modules. Zero plaintext on the wire.",
-  body: "Cloak unifies everyday credentials with developer workflows — most notably encrypted .env management — behind a fast, native interface.",
+  title: "One vault. Seven modules. Zero plaintext on the wire.",
+  body: "Cloak unifies everyday credentials with developer workflows — encrypted .env management, cloud access keys, SSH key files — behind a fast, native interface.",
   points: [
     {
       title: "Credentials & API keys",
       body: "Store logins and tokens the way you work. Masked by default. Revealed on demand, per field.",
+    },
+    {
+      title: "Access & SSH keys",
+      body: "AWS-style key pairs — typed in or imported from a credentials CSV — plus RSA/ED25519 key files in PEM or PuTTY format, detected on import.",
     },
     {
       title: "Environment files",
@@ -86,23 +99,25 @@ export const FEATURE_BLOCKS = [
   },
 ] as const;
 
-export const WHY_COMPARE = [
-  {
-    title: "Password managers",
-    weakness: "Built for logins — not .env workflows, API key lifecycle, or dotenvx.",
-    cloak: "Five modules including environment files and projects.",
-  },
-  {
-    title: "Cloud secret stores",
-    weakness: "Often require trusting the provider with keys that can decrypt your data.",
-    cloak: "Server stores ciphertext it cannot read. Ever.",
-  },
-  {
-    title: "Notes & .env in git",
-    weakness: "Secrets scatter. History leaks. Accidental commits happen.",
-    cloak: "Encrypted vault with on-demand reveal and sandbox to explore safely.",
-  },
-] as const;
+export type WhyMark = "yes" | "partial" | "no";
+
+/** Comparison matrix: each row's `marks` align with `columns`; Cloak is an
+ *  implicit final column that has every feature. */
+export const WHY_MATRIX = {
+  columns: ["Password managers", "Cloud secret stores", "Notes & .env in git"],
+  rows: [
+    { feature: "Zero-knowledge, client-side encryption", marks: ["yes", "no", "no"] },
+    { feature: "Encrypted .env files (dotenvx-compatible)", marks: ["no", "partial", "no"] },
+    { feature: "API keys, access keys & SSH key files", marks: ["partial", "partial", "no"] },
+    { feature: "2FA backup codes, organized per platform", marks: ["partial", "no", "no"] },
+    { feature: "Field-level reveal — one secret at a time", marks: ["partial", "no", "no"] },
+    { feature: "Native desktop app for Windows, macOS, Linux", marks: ["yes", "no", "no"] },
+    { feature: "Free & MIT open source", marks: ["partial", "no", "yes"] },
+  ],
+} as const satisfies {
+  columns: readonly string[];
+  rows: readonly { feature: string; marks: readonly WhyMark[] }[];
+};
 
 export const TESTIMONIALS = [
   {
@@ -127,7 +142,7 @@ export const TESTIMONIALS = [
 
 export const STATS = [
   { value: 0, suffix: "", label: "plaintext secrets on the server", display: "0" },
-  { value: 5, suffix: "", label: "vault modules in one native app", display: "5" },
+  { value: 7, suffix: "", label: "vault modules in one native app", display: "7" },
   { value: 3, suffix: "", label: "platforms — Windows, macOS, Linux", display: "3" },
   { value: 30, suffix: "-day", label: "Remember Me via OS secure store", display: "30" },
 ] as const;
@@ -187,6 +202,8 @@ export const FINAL_CTA = {
 export const VAULT_MODULES = [
   "Credentials",
   "API Keys",
+  "Access Keys",
+  "SSH Keys",
   "Environment Files",
   "Backup Codes",
   "Projects",

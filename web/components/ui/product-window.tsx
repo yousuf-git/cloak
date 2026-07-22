@@ -41,12 +41,12 @@ export function ProductWindow({ className, compact = false }: ProductWindowProps
             <span className="text-sm font-semibold tracking-tight">Cloak</span>
           </div>
           <nav className="space-y-0.5">
-            {VAULT_MODULES.map((item, i) => (
+            {VAULT_MODULES.map((item) => (
               <div
                 key={item}
                 className={cn(
                   "rounded-md px-2.5 py-1.5 text-sm",
-                  i === 2
+                  item === "Environment Files"
                     ? "bg-[var(--color-surface-2)] font-medium text-[var(--color-fg)]"
                     : "text-[var(--color-fg-muted)]",
                 )}
