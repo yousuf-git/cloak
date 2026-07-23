@@ -53,6 +53,72 @@ Cloak keeps the convenience of a synced vault while guaranteeing the server — 
 
 Cloak splits responsibilities between an on-device Rust core (all cryptography) and a thin cloud API (opaque storage + auth orchestration).
 
+### Zero-Knowledge by Construction
+
+Zero-knowledge here is not a policy — it falls out of the key hierarchy. Every key that can decrypt anything is derived or generated **on-device**, and only wrapped (encrypted) forms ever reach the server:
+
+```mermaid
+%%{init: {
+  'theme': 'base',
+  'themeVariables': {
+    'edgeLabelBackground':'#ffffff',
+    'tertiaryTextColor': '#616161',
+    'primaryTextColor': '#616161'
+  }
+}}%%
+
+flowchart TB
+    subgraph Device["On-device (Rust core) — nothing here ever leaves"]
+        PW["Master password"]
+        MK["MasterKey<br/>(volatile memory only)"]
+        DEK["VaultDEK<br/>32 random bytes"]
+        Fields["Secret fields<br/>=XChaCha20(VaultDEK, plaintext)"]
+
+        PW -->|"Argon2id · cloak:mk"| MK
+        DEK -->|"encrypts"| Fields
+    end
+
+    subgraph Server["Server / MongoDB — opaque values only"]
+        PH["password_hash<br/>=argon2id(authHash)"]
+        WDEK["wrappedDEK<br/>=XChaCha20(MasterKey, VaultDEK)"]
+        CT["Ciphertext fields"]
+    end
+
+    PW -->|"Argon2id · cloak:auth"| AH["authHash"]
+    AH -->|"sent, then re-hashed server-side"| PH
+    MK -->|"wraps"| WDEK
+    WDEK -.->|"unwrap at login"| DEK
+    Fields -->|"stored"| CT
+
+    classDef device fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,color:#000000,font-weight:bold
+    classDef server fill:#e3f2fd,stroke:#0d47a1,stroke-width:2px,color:#000000,font-weight:bold
+    classDef component fill:#ffffff,stroke:#424242,stroke-width:2px,color:#000000
+
+    class Device device
+    class Server server
+    class PW,MK,DEK,Fields,PH,WDEK,CT,AH component
+```
+
+The same password produces two independent keys via Argon2id **domain separation**:
+
+- **MasterKey** (`cloak:mk` context) — wraps the Vault DEK. Exists only in Rust process memory; never stored, never transmitted.
+- **authHash** (`cloak:auth` context) — sent to the server purely to prove identity. The server Argon2id-hashes it *again* before storage, so even a full database leak yields no replayable credential — and the authHash cannot be reversed into the MasterKey.
+
+The **Vault DEK** — a random 256-bit key that actually encrypts every secret field (by XChaCha20-Poly1305) — is stored only as `wrappedDEK`, sealed under the MasterKey. At login the client re-derives the MasterKey locally, unwraps the DEK in Rust memory, and the webview only ever handles ciphertext strings plus transiently revealed plaintext. Raw key bytes never cross the webview boundary, let alone the network.
+
+What this means concretely for someone with **full read access to the database**:
+
+| They get | They can do with it |
+|----------|---------------------|
+| `password_hash` = argon2id(authHash) | Nothing — a one-way hash of an already-derived value; not the password, not a login token |
+| `wrappedDEK`, `recovery_wrappedDEK` | Nothing without the master password or recovery key — opaque XChaCha20-Poly1305 blobs |
+| Secret fields (`password`, `key`, `.env` content) | Nothing — ciphertext under the DEK they cannot unwrap |
+| `crypto_salt`, emails, names/labels/URLs | Read searchable metadata only — by design, this powers instant client-side search |
+
+Account recovery keeps the same guarantee: the DEK is additionally wrapped under a key derived from a 160-bit recovery key shown once at signup, so a password reset unwraps and re-wraps 32 bytes client-side — the server rotates envelopes it still cannot open, and existing ciphertext stays valid.
+
+For the full code-traced walkthrough — every flow from keystroke to MongoDB document with `file:line` references — see [`docs/CORE_LOGICS.md`](./docs/CORE_LOGICS.md).
+
 ### Desktop App Architecture
 
 ```mermaid

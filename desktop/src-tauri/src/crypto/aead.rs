@@ -1,3 +1,5 @@
+/// AEAD: Authenticated Encryption with Associated Data
+
 use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
 use chacha20poly1305::{
   aead::{Aead, KeyInit},

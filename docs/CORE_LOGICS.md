@@ -62,7 +62,7 @@ display. The raw DEK bytes never cross the webview boundary.
 
 Everything below is built from two primitives. Learn these and every flow becomes obvious.
 
-### 2.1 Field cipher — XChaCha20-Poly1305 (AEAD)
+### 2.1 Field cipher — XChaCha20-Poly1305 (AEAD(Authenticated Encryption with Associated Data))
 
 Used for: DEK wrapping, every credential/API-key/backup-code field, and the wrapped dotenvx key.
 
@@ -113,7 +113,8 @@ KEY=value   ──encrypt_env_value(pubkey)──►   KEY="encrypted:BAllx3…Q
    - `MasterKey = derive(pw, salt, "cloak:mk")` — [`kdf.rs:45`](../desktop/src-tauri/src/crypto/kdf.rs#L45)
    - `authHash  = base64(derive(pw, salt, "cloak:auth"))` — [`kdf.rs:53`](../desktop/src-tauri/src/crypto/kdf.rs#L53)
    - `DEK = 32 random bytes`; `wrappedDEK = seal(MasterKey, DEK)` — [`crypto.rs:56`](../desktop/src-tauri/src/commands/crypto.rs#L56)
-   - `recovery_key` (160-bit Crockford); `recovery_wrappedDEK = seal(recoveryWK, DEK)` — [`crypto.rs:61`](../desktop/src-tauri/src/commands/crypto.rs#L61)
+   - `recovery_key` (160-bit Crockford); `recoveryWK = derive(recovery_key, salt, "cloak:rk")`;
+     `recovery_wrappedDEK = seal(recoveryWK, DEK)` — [`crypto.rs:61-63`](../desktop/src-tauri/src/commands/crypto.rs#L61-L63)
 
 2. **Client POSTs only hashes + ciphertext** — [`api.signup`](../desktop/src/lib/api.ts#L128) →
    `POST /api/v1/auth/signup`.
@@ -125,7 +126,7 @@ KEY=value   ──encrypt_env_value(pubkey)──►   KEY="encrypted:BAllx3…Q
 4. **Client shows the recovery key once**, then wipes it from memory
    ([`auth.ts:124`](../desktop/src/stores/auth.ts#L124)).
 
-### The KDF, precisely
+### The KDF (Key Derivation Function), precisely
 
 [`kdf.rs:23`](../desktop/src-tauri/src/crypto/kdf.rs#L23) — Argon2id, `m=19456 KiB, t=2, p=1`,
 32-byte output, then **domain separation** by XOR-ing the associated-data label (`cloak:mk` /
@@ -205,7 +206,154 @@ DEK + refresh token in the OS keychain via Rust ([`crypto.rs:308`](../desktop/sr
 
 ---
 
-## 5. Flow C — Create a credential (input → DB) ⭐ the headline example
+## 5. Flow C — Retrieve & reveal a credential (DB → display)
+
+The mirror image of the create flow (Flow D, §6): ciphertext travels **server → webview → Rust → plaintext → screen**, and
+each key touches the flow exactly once. This section traces every hop, including what happens when
+decryption *fails*.
+
+### 5.0 Which keys participate — and which don't
+
+| Key | Role in retrieval | Where it is at this moment |
+|-----|-------------------|----------------------------|
+| **VaultDEK** | The **only** key used. Every `open()` call for a field runs against it. | Rust session memory ([`session/mod.rs:16`](../desktop/src-tauri/src/session/mod.rs#L16)), placed there at login (Flow B step 6) or by Remember-Me restore ([`load_dek_from_b64`](../desktop/src-tauri/src/session/mod.rs#L64)) |
+| **MasterKey** | **Not used.** Its only job was unwrapping the DEK at unlock; reveal never re-derives it. | Rust session memory, idle |
+| master password | **Not used.** Retrieval never re-prompts for it. | Nowhere — discarded after unlock |
+| JWT access token | Authorizes the *fetch* (`Authorization: Bearer`), plays no part in crypto. | Webview memory ([`api.ts:26`](../desktop/src/lib/api.ts#L26)) |
+
+Two consequences worth spelling out:
+
+- **Reveal works without the password.** A Remember-Me restored session has a DEK but never had the
+  password typed this session — decryption is identical, because `with_dek` only requires the DEK
+  ([`session/mod.rs:30`](../desktop/src-tauri/src/session/mod.rs#L30)).
+- **Locked session ⇒ hard stop.** If the DEK slot is empty, `with_dek` returns
+  `CryptoError::SessionLocked` ([`session/mod.rs:32`](../desktop/src-tauri/src/session/mod.rs#L32))
+  and no ciphertext can be opened — there is no fallback path.
+
+### 5.1 List (fetch ciphertext)
+
+On mount, [`useCreds`](../desktop/src/hooks/vault.ts#L14) runs a TanStack Query (key `['creds']`,
+disabled in sandbox mode) → `GET /api/v1/vault/creds` →
+[`listCreds` controller](../api/src/controllers/vault.controller.ts#L19) →
+[`Cred.find({ user_id }).sort({ created_at: -1 }).lean()`](../api/src/services/vault.service.ts#L13).
+
+The query is **scoped to `user_id`** (from the verified JWT) — a user can only ever read their own
+rows. The response contains the ciphertext `password` exactly as stored: the same
+`base64(nonce‖ct‖tag)` string written at create time (Flow D, §6). Nothing is decrypted server-side — the server has
+no key that *could* open it.
+
+### 5.2 Render masked
+
+Each row renders the password through [`SecretField`](../desktop/src/components/ui/SecretField.tsx#L134),
+wired at [`CredentialsPage.tsx:140`](../desktop/src/pages/CredentialsPage.tsx#L140):
+
+```tsx
+<SecretField cipher={cred.password} reveal={() => decrypt(cred.password)} maskLength={20} />
+```
+
+Two props matter:
+
+- `cipher` — the stored ciphertext, used **only for display**: `maskedPreview`
+  ([`SecretField.tsx:128`](../desktop/src/components/ui/SecretField.tsx#L128)) shows its first 20
+  characters (`n0pQhVZ2LkXaW9cMpT3d…`). The user literally sees encrypted bytes, reinforcing that
+  nothing is decrypted until asked.
+- `reveal` — a **lazy decryptor closure**. Note the component never receives plaintext or a key; it
+  receives a *function* that can produce plaintext on demand. Until clicked, no crypto runs at all —
+  rendering a list of 500 credentials performs zero decryptions.
+
+### 5.3 Reveal on demand — the full decrypt pipeline
+
+Clicking the eye triggers `toggleReveal` → `resolve()`
+([`SecretField.tsx:161`](../desktop/src/components/ui/SecretField.tsx#L161),
+[`:144`](../desktop/src/components/ui/SecretField.tsx#L144)), which calls the `reveal` closure:
+
+```
+ [eye click]                    SecretField.tsx:161
+      ▼
+ decrypt(cred.password)         useVaultCrypto.ts:20    mode switch: sandbox → sbDecrypt (fake),
+      │                                                 real → crypto.decryptField
+      ▼
+ crypto.decryptField(ct)        tauri-crypto.ts:69      invoke('crypto_decrypt_field', …)
+      │                                                 ── webview → Rust IPC boundary ──
+      ▼
+ crypto_decrypt_field           commands/crypto.rs:156  session.with_dek(|dek| decrypt_field(dek, ct))
+      ▼
+ with_dek                       session/mod.rs:30       lock mutex, borrow DEK (or SessionLocked)
+      ▼
+ decrypt_field(dek, ct)         crypto/dek.rs:34        thin wrapper over aead::open
+      ▼
+ open(dek, ct)                  crypto/aead.rs:31       1. base64-decode
+      │                                                 2. split: first 24 bytes = nonce, rest = ct‖tag
+      │                                                 3. XChaCha20Poly1305::decrypt — verifies the
+      │                                                    16-byte Poly1305 tag *before* releasing
+      │                                                    any plaintext (AEAD: tamper ⇒ error, never
+      │                                                    garbage output)
+      │                                                 4. wrap result in Zeroizing<Vec<u8>>
+      ▼
+ String::from_utf8              crypto/dek.rs:36        bytes → "hunter2"
+      ▼
+ IPC return → setPlain(result)  SecretField.tsx:150     plaintext cached in component state
+      ▼
+ scramble animation             SecretField.tsx:170     ciphertext glyphs settle into plaintext
+```
+
+Worked example, byte-level:
+
+```
+stored:  "n0pQ…KcQ=="                      # 64 base64 chars
+decode:  47 bytes = [24 nonce][7 ct][16 tag]
+verify:  Poly1305(dek, nonce, ct) == tag   # constant-time; mismatch ⇒ CryptoError::Aead
+decrypt: XChaCha20(dek, nonce) ⊕ ct        # 7 bytes
+utf8:    "hunter2"
+```
+
+Key facts about this path:
+
+- **The DEK never leaves `with_dek`'s closure.** The webview sends ciphertext in and gets plaintext
+  out; the key itself is borrowed under a mutex for the duration of one decrypt and never serialized
+  across the IPC boundary.
+- **Every reveal is a fresh Rust round-trip.** There is no plaintext cache outside the component:
+  `resolve()` memoizes into local state (`plain`) only while the component lives, and only after the
+  first click.
+- **Rust-side plaintext is `Zeroizing`** ([`aead.rs:45`](../desktop/src-tauri/src/crypto/aead.rs#L45))
+  — the decrypted buffer is wiped when it drops, after the UTF-8 copy is handed to the IPC layer.
+
+### 5.4 Failure paths
+
+- **Tampered / corrupted ciphertext** — Poly1305 verification fails inside `open`, surfacing as
+  `CryptoError::Aead` → the invoke rejects → `resolve()` catches and sets the error state
+  ([`SecretField.tsx:153`](../desktop/src/components/ui/SecretField.tsx#L153)); the field renders
+  **"Unable to decrypt"** in red ([`SecretField.tsx:201`](../desktop/src/components/ui/SecretField.tsx#L201)).
+  A malicious or buggy server can therefore never make the app display attacker-chosen plaintext.
+- **Locked session** (e.g. invoked before unlock) — `SessionLocked` from `with_dek`, same UI error
+  path. Nothing decrypts until Flow B or Remember-Me restore repopulates the DEK.
+- **Wrong DEK** cannot happen in practice — there is exactly one DEK per user, and it's the one that
+  encrypted the field. If it *were* wrong, the tag check fails exactly like tampering (AEAD gives no
+  "partially decrypted" output).
+
+### 5.5 Copy, hide, edit — plaintext lifetime
+
+- **Copy** ([`SecretField.tsx:174`](../desktop/src/components/ui/SecretField.tsx#L174)) runs the
+  same lazy `resolve()` (decrypting only if not already revealed), writes to the clipboard, and
+  never toggles the visual reveal — you can copy while the field stays masked.
+- **Hide** plays the scramble in reverse and re-masks
+  ([`SecretField.tsx:163`](../desktop/src/components/ui/SecretField.tsx#L163)). The component-state
+  plaintext survives until unmount, so re-revealing is instant; unmounting (navigation, list
+  refresh) drops it.
+- **Edit** re-decrypts to prefill the form
+  ([`CredentialsPage.tsx:242`](../desktop/src/pages/CredentialsPage.tsx#L242)), then re-encrypts on
+  save through the Flow D pipeline (§6) — `seal` draws a **fresh random nonce**, so the stored ciphertext
+  changes even when the password didn't. Observing ciphertext change is *not* evidence the secret
+  changed.
+
+> **Sandbox mode** short-circuits the whole pipeline: `useVaultCrypto` swaps the Rust calls for a
+> reversible fake cipher ([`useVaultCrypto.ts:22`](../desktop/src/hooks/useVaultCrypto.ts#L22),
+> [`sandbox-cipher`](../desktop/src/lib/sandbox-cipher.ts)) so the demo renders convincing
+> ciphertext without a session, DEK, or network.
+
+---
+
+## 6. Flow D — Create a credential (input → DB) ⭐ the headline example
 
 This is the "when a user inputs, what happens until it's stored" walkthrough.
 
@@ -283,54 +431,6 @@ User types `name`, `url`, `username`, `password`, `note` and clicks Create.
 
 ---
 
-## 6. Flow D — Retrieve & reveal a credential (DB → display)
-
-### 6.1 List (fetch ciphertext)
-
-On mount, [`useCreds`](../desktop/src/hooks/vault.ts#L7) runs a TanStack Query →
-`GET /api/v1/vault/creds` → [`listCreds`](../api/src/controllers/vault.controller.ts#L19) →
-[`Cred.find({ user_id }).sort({ created_at: -1 }).lean()`](../api/src/services/vault.service.ts#L11).
-
-The query is **scoped to `user_id`** — a user can only ever read their own rows. The response
-contains the ciphertext `password` exactly as stored. Nothing is decrypted server-side.
-
-### 6.2 Render masked
-
-Each row renders the password through [`SecretField`](../desktop/src/components/ui/SecretField.tsx#L134),
-wired at [`CredentialsPage.tsx:140`](../desktop/src/pages/CredentialsPage.tsx#L140):
-
-```tsx
-<SecretField cipher={cred.password} reveal={() => decrypt(cred.password)} maskLength={20} />
-```
-
-By default it shows a **truncated preview of the ciphertext itself** (`maskedPreview`,
-[`SecretField.tsx:128`](../desktop/src/components/ui/SecretField.tsx#L128)) — the user sees encrypted
-characters, reinforcing that nothing is decrypted until asked.
-
-### 6.3 Reveal on demand (lazy decrypt)
-
-Clicking the eye calls `reveal()` → `decrypt(cred.password)`
-([`useVaultCrypto.ts:20`](../desktop/src/hooks/useVaultCrypto.ts#L20)) →
-[`crypto_decrypt_field`](../desktop/src-tauri/src/commands/crypto.rs#L155) →
-`open(DEK, ciphertext)` → plaintext. The plaintext is cached in local component state **only while
-revealed**, and a scramble animation transitions ciphertext↔plaintext
-([`SecretField.tsx:161`](../desktop/src/components/ui/SecretField.tsx#L161)).
-
-```
-"n0pQ…KcQ=="  ──crypto_decrypt_field──►  open(DEK, …)  ──►  "hunter2"
-                                          (Rust: nonce split, Poly1305 verified, UTF-8 decoded)
-```
-
-Copy does the same lazy `resolve()` then writes to the clipboard
-([`SecretField.tsx:174`](../desktop/src/components/ui/SecretField.tsx#L174)). Hiding re-masks and
-drops the cached plaintext.
-
-**Editing** re-decrypts to prefill the form ([`CredentialsPage.tsx:239`](../desktop/src/pages/CredentialsPage.tsx#L239)),
-then re-encrypts on save — a fresh nonce means the stored ciphertext changes even for an unchanged
-password.
-
----
-
 ## 7. Flow E — `.env` files (dotenvx)
 
 Env files are the exception to per-field crypto: the **whole file** is stored as one dotenvx blob,
@@ -398,24 +498,139 @@ decrypt — and the file stays decryptable by anyone holding the (still-wrapped)
 
 ## 8. Flow F — Zero-knowledge account recovery
 
-The recovery envelope (`recovery_wrappedDEK`, written at signup) lets a user recover the vault
-**without** the master password. Store actions [`auth.ts:209`–273](../desktop/src/stores/auth.ts#L209).
+**Scenario:** the user has forgotten the master password but still holds the recovery key shown once
+at signup. The goal is to unlock the *same* vault (same DEK, so all existing ciphertext keeps
+working) and put a *new* password on it — with the server learning nothing. Store actions
+[`auth.ts:209`–273](../desktop/src/stores/auth.ts#L209).
 
-1. **Start** — `POST /auth/recovery/start` emails an OTP; always "succeeds" to avoid enumeration
+### 8.0 The mental model: one payload, two locks
+
+At signup the **same 32-byte DEK** was sealed into two independent envelopes:
+
+```
+wrappedDEK          = seal(MasterKey,  DEK)     # lock #1 — opens with the password
+recovery_wrappedDEK = seal(recoveryWK, DEK)     # lock #2 — opens with the recovery key
+```
+
+Losing the password kills lock #1 forever, but lock #2 is untouched. And lock #2 is openable because
+of two properties working together:
+
+1. **The KDF is deterministic.** `derive(recoveryKey, salt, "cloak:rk")` at recovery time produces
+   the *byte-identical* `recoveryWK` that was produced at signup — same input key material, same
+   stored salt, same domain label ⇒ same 32 bytes out. Nothing about `recoveryWK` needs to be
+   stored; it is **recomputable on demand** from what the user holds.
+2. **The cipher is symmetric.** XChaCha20-Poly1305 uses one key for both directions, so the
+   recomputed `recoveryWK` opens what the original `recoveryWK` sealed. `unwrap` is just
+   [`open`](../desktop/src-tauri/src/crypto/aead.rs#L31) — base64-decode, split off the 24-byte
+   nonce, verify the Poly1305 tag, decrypt — and the original 32 DEK bytes fall out
+   ([`unwrap_dek`, `dek.rs:18`](../desktop/src-tauri/src/crypto/dek.rs#L18)).
+
+So `DEK = unwrap(recoveryWK, recovery_wrappedDEK)` is not deriving a new key — it is *decrypting the
+stored copy of the old one* with a key the client just recomputed. The server, holding only
+`recovery_wrappedDEK` and never the recovery key, can recompute nothing.
+
+#### How do we *know* the unwrapped DEK is the right one?
+
+We never held the original DEK to compare against — so what proves the 32 bytes coming out of
+`unwrap` are correct? <br> The answer is the **Poly1305 authentication tag**. AEAD means `seal` didn't just encrypt the
+DEK; it also computed a 16-byte MAC over the ciphertext, keyed by `recoveryWK`, and stored it inside
+the envelope:
+
+```
+recovery_wrappedDEK = base64( nonce ‖ ct ‖ tag )
+                                       where tag = Poly1305(f(recoveryWK, nonce), ct)
+```
+
+At recovery, `open` recomputes the tag with the candidate key **before releasing any plaintext**
+([`aead.rs:41`](../desktop/src-tauri/src/crypto/aead.rs#L41)):
+
+- **Right recovery key** → same `recoveryWK` → recomputed tag equals the stored tag → decryption
+  proceeds, and the output is mathematically guaranteed to be the original DEK bytes.
+- **Wrong recovery key** → different `recoveryWK` → tag mismatch → `CryptoError::Aead`, **no output
+  at all**. The chance of a wrong key passing verification is ~2⁻¹²⁸.
+
+The tag is effectively a keyed checksum written at signup and checked at recovery — the "original to
+compare against" is baked into the envelope itself. This is what plain XChaCha20 without Poly1305
+could *not* do: it would "decrypt" under any key and hand back 32 random-looking bytes with no way
+to tell them from the real DEK. Two redundant backstops exist after the tag check — the payload must
+be exactly 32 bytes ([`dek.rs:20`](../desktop/src-tauri/src/crypto/dek.rs#L20)), and every vault
+field is itself tag-protected under the DEK, so a hypothetically wrong DEK would fail every field's
+`open` rather than display garbage.
+
+### 8.1 Step 1–2 — Prove mailbox ownership, fetch the envelope
+
+1. **Start** — `POST /auth/recovery/start` emails an OTP; the endpoint always "succeeds" so
+   attackers can't probe which emails have accounts
    ([`auth.service.ts:151`](../api/src/services/auth.service.ts#L151)).
-2. **Verify** — `POST /auth/recovery/verify` returns `{ crypto_salt, recovery_wrappedDEK,
-   recoveryToken }` ([`auth.service.ts:165`](../api/src/services/auth.service.ts#L165)).
-3. **Reset (all crypto client-side)** — [`crypto_recovery_reset`](../desktop/src-tauri/src/commands/crypto.rs#L79):
-   - `recoveryWK = derive(recoveryKey, salt, "cloak:rk")`; `DEK = unwrap(recoveryWK, recovery_wrappedDEK)`
-     — wrong key ⇒ clean error ([`crypto.rs:88`](../desktop/src-tauri/src/commands/crypto.rs#L88)),
-   - generate a **new salt**, derive a new MasterKey + authHash from the new password,
-     re-wrap the DEK under both the new MasterKey and a new recovery envelope,
-   - establish the session immediately ([`crypto.rs:101`](../desktop/src-tauri/src/commands/crypto.rs#L101)).
-4. Server rotates `password_hash`, `crypto_salt`, both envelopes, and **revokes all sessions**
-   ([`auth.service.ts:196`](../api/src/services/auth.service.ts#L196)).
+2. **Verify** — `POST /auth/recovery/verify` checks the OTP and returns
+   `{ crypto_salt, recovery_wrappedDEK, recoveryToken }`
+   ([`auth.service.ts:165`](../api/src/services/auth.service.ts#L165)).
 
-The DEK is preserved across the reset, so **existing vault ciphertext stays valid** — only its
-wrapping keys change.
+Note what the server just handed out: the **old salt** (public anyway — needed to recompute
+`recoveryWK`), the **sealed envelope** (opaque without the recovery key), and a short-lived
+`recoveryToken` authorizing exactly one commit in step 4. Handing these to the wrong person leaks
+nothing — without the 160-bit recovery key the envelope is undecryptable.
+
+### 8.2 Step 3 — All the crypto, client-side in one Rust call
+
+[`crypto_recovery_reset`](../desktop/src-tauri/src/commands/crypto.rs#L79) takes
+`(recoveryKey, old_salt, recovery_wrappedDEK, newPassword)` and does the whole rotation:
+
+```
+ # ---- open the old envelope -------------------------------------------------
+ recoveryWK = derive(recoveryKey, old_salt, "cloak:rk")        crypto.rs:86
+ DEK        = unwrap(recoveryWK, recovery_wrappedDEK)          crypto.rs:88
+              # wrong/typo'd recovery key ⇒ different recoveryWK ⇒ Poly1305 tag
+              # mismatch ⇒ clean error: "That recovery key doesn't match this
+              # account." — never a garbage DEK (crypto.rs:88-90)
+
+ # ---- rebuild everything under the new password ------------------------------
+ new_salt      = 16 fresh random bytes                         crypto.rs:92
+ new_MasterKey = derive(newPassword, new_salt, "cloak:mk")     crypto.rs:93
+ new_authHash  = derive(newPassword, new_salt, "cloak:auth")   crypto.rs:94
+ new_wrappedDEK = seal(new_MasterKey, DEK)                     crypto.rs:95     # lock #1, re-keyed
+
+ # ---- re-seal the recovery envelope too --------------------------------------
+ new_recoveryWK          = derive(recoveryKey, new_salt, "cloak:rk")   crypto.rs:97
+ new_recovery_wrappedDEK = seal(new_recoveryWK, DEK)                   crypto.rs:99  # lock #2, re-keyed
+
+ # ---- unlock immediately ------------------------------------------------------
+ session.set_master_key(new_MasterKey); session.set_dek(DEK)   crypto.rs:101-102
+```
+
+Three things to notice:
+
+- **The DEK in = the DEK out.** It is unwrapped once and re-sealed twice; its bytes never change, so
+  every credential/API-key/env-file ciphertext in the DB stays decryptable as-is. Recovery touches
+  ~200 bytes of envelopes, never the vault.
+- **The recovery key survives and stays valid.** The new recovery envelope is sealed under the *same*
+  recovery key, re-derived with the **new salt** (`crypto.rs:97`). The user keeps the one recovery
+  key they wrote down; only its derived wrapping key rotated.
+- **The session is established in the same call** — the user lands in an unlocked vault without a
+  separate login round-trip.
+
+### 8.3 Step 4 — Server commits the rotation
+
+The client sends `{ recoveryToken, new_authHash, new_salt, new_wrappedDEK,
+new_recovery_wrappedDEK }`. The server verifies the token, then atomically replaces
+`password_hash` (= argon2id(new_authHash)), `crypto_salt`, and both envelopes, and **revokes every
+existing session/refresh token** ([`auth.service.ts:196`](../api/src/services/auth.service.ts#L196))
+— anyone holding stolen tokens from the old password era is logged out.
+
+### 8.4 What changed vs. what survived
+
+| Item | After recovery |
+|------|----------------|
+| DEK | **unchanged** — vault ciphertext stays valid |
+| Vault ciphertext (creds, keys, env blobs) | **untouched** |
+| Recovery key (user's paper copy) | **still valid** — envelope re-sealed under it |
+| `crypto_salt` | rotated (fresh random) |
+| MasterKey / `password_hash` / `wrappedDEK` | rotated — derived from the new password |
+| `recovery_wrappedDEK` | rotated — same recovery key, new salt |
+| All server sessions / refresh tokens | revoked |
+
+At no point did the password (old or new), the recovery key, the MasterKey, or the raw DEK cross the
+network — the server saw one OTP, one token, and four opaque strings.
 
 ---
 
