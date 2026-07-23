@@ -8,6 +8,8 @@ export const SITE = {
   repoApi: "https://api.github.com/repos/yousuf-git/cloak",
   license: "MIT",
   author: "yousuf-git",
+  authorName: "M. Yousuf",
+  authorUrl: "https://yousuf-dev.com",
 } as const;
 
 // "/#anchor" (not "#anchor") so links resolve from subpages like /download.

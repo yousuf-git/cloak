@@ -32,6 +32,8 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "publisher": "M. Yousuf",
+    "copyright": "Copyright © 2026 M. Yousuf — https://yousuf-dev.com",
     "icon": [
       "icons/32x32.png",
       "icons/64x64.png",

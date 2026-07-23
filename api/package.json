@@ -2,6 +2,7 @@
   "name": "@cloak/api",
   "version": "0.0.0",
   "private": true,
+  "author": "M. Yousuf <yousuf.work09@gmail.com> (https://github.com/yousuf-git)",
   "type": "module",
   "main": "dist/server.js",
   "scripts": {

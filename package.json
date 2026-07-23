@@ -3,6 +3,13 @@
   "version": "0.0.0",
   "private": true,
   "description": "Zero-knowledge, developer-centric secrets manager and password vault (desktop).",
+  "author": "M. Yousuf <yousuf.work09@gmail.com> (https://github.com/yousuf-git)",
+  "homepage": "https://yousuf-dev.com",
+  "_developer": {
+    "name": "M. Yousuf",
+    "github": "https://github.com/yousuf-git",
+    "portfolio": "https://yousuf-dev.com"
+  },
   "packageManager": "pnpm@10.33.0",
   "engines": {
     "node": ">=22"

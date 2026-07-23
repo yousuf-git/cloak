@@ -2,6 +2,7 @@
   "name": "@cloak/web",
   "version": "0.1.0",
   "private": true,
+  "author": "M. Yousuf <yousuf.work09@gmail.com> (https://github.com/yousuf-git)",
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build",

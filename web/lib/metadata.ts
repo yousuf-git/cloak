@@ -41,8 +41,11 @@ export const siteMetadata = {
     "API keys",
     "desktop app",
   ],
-  authors: [{ name: SITE.author, url: SITE.repo }],
-  creator: SITE.author,
+  authors: [
+    { name: SITE.authorName, url: SITE.authorUrl },
+    { name: SITE.author, url: SITE.repo },
+  ],
+  creator: SITE.authorName,
   metadataBase: getMetadataBase(),
   openGraph: {
     type: "website" as const,
