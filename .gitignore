@@ -12,8 +12,6 @@ desktop/src-tauri/target/
 target/
 
 # Environment / secrets
-.env
-.env.*
 !.env.example
 # Secret-free build config: the sidecar's localhost URL, needed for a clean build.
 !desktop/.env.production
@@ -38,3 +36,4 @@ coverage/
 
 # Local files
 local
+config.bat
