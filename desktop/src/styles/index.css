@@ -20,6 +20,10 @@
   --color-brand-600: #4f46e5;
   --color-brand-700: #4338ca;
 
+  /* Neon orbit-ring accents (dashboard security card) — same in both themes. */
+  --orb-violet: #d946ef;
+  --orb-cyan: #38bdf8;
+
   /* Semantic surfaces (light) */
   --color-bg: #f6f7f9;
   --color-surface: #ffffff;
@@ -128,4 +132,133 @@
 .no-drag {
   -webkit-app-region: no-drag;
   app-region: no-drag;
+}
+
+/* 3D orbital rings around the dashboard's security-card shield — two tilted
+   elliptical planes (preserve-3d) with a spinning conic-gradient stroke
+   masked down to a thin comet-tail line, plus a glowing head on each. */
+.orb-scene {
+  /* position comes from Tailwind's `absolute` utility in JSX — setting it
+     here too would fight it, since this unlayered rule outranks
+     @layer utilities regardless of source order. */
+  perspective: 900px;
+  transform-style: preserve-3d;
+}
+
+.orb-shield {
+  z-index: 5;
+  animation: orb-float 6s ease-in-out infinite;
+}
+
+@keyframes orb-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+.orb-wrap {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  pointer-events: none;
+}
+
+.orb-wrap-1 { transform: rotateX(68deg) rotateY(28deg); }
+.orb-wrap-2 { transform: rotateX(68deg) rotateY(-28deg); }
+
+.orb-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  transform-style: preserve-3d;
+  animation: orb-spin 8s linear infinite;
+}
+
+.orb-wrap-2 .orb-ring {
+  animation-duration: 9.5s;
+  animation-direction: reverse;
+}
+
+@keyframes orb-spin {
+  from { transform: rotateZ(0deg); }
+  to { transform: rotateZ(360deg); }
+}
+
+.orb-ring::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  -webkit-mask-image: radial-gradient(farthest-side, transparent calc(100% - 1.5px), #000 calc(100% - 1.5px));
+  mask-image: radial-gradient(farthest-side, transparent calc(100% - 1.5px), #000 calc(100% - 1.5px));
+}
+
+.orb-wrap-1 .orb-ring::before {
+  background: conic-gradient(from 0deg, transparent 0%, transparent 72%, var(--orb-violet) 88%, #f5d0fe 97%, transparent 100%);
+  box-shadow: 0 0 10px var(--orb-violet), inset 0 0 10px var(--orb-violet);
+}
+
+.orb-wrap-2 .orb-ring::before {
+  background: conic-gradient(from 0deg, transparent 0%, transparent 72%, var(--orb-cyan) 88%, #cffafe 97%, transparent 100%);
+  box-shadow: 0 0 10px var(--orb-cyan), inset 0 0 10px var(--orb-cyan);
+}
+
+.orb-node {
+  position: absolute;
+  top: -3px;
+  left: 50%;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #fff;
+  transform: translateX(-50%);
+}
+
+.orb-wrap-1 .orb-node {
+  box-shadow: 0 0 4px #fff, 0 0 8px var(--orb-violet), 0 0 14px var(--orb-violet);
+}
+
+.orb-wrap-2 .orb-node {
+  box-shadow: 0 0 4px #fff, 0 0 8px var(--orb-cyan), 0 0 14px var(--orb-cyan);
+}
+
+/* Ground-ring the shield floats above — a flattened double ring sitting
+   below the shield's base with a clear gap, not a glow touching the asset
+   (that read as a filter glued to it). Not part of the source art, which
+   couldn't be masked cleanly, so this stays put and never mispositions. */
+.orb-shadow {
+  position: absolute;
+  left: 50%;
+  bottom: 2%;
+  width: 74%;
+  height: 20%;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.orb-shadow::before,
+.orb-shadow::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1.5px solid color-mix(in srgb, var(--orb-violet) 60%, transparent);
+  background: radial-gradient(
+    ellipse at center,
+    color-mix(in srgb, var(--orb-violet) 55%, transparent) 0%,
+    color-mix(in srgb, var(--orb-violet) 22%, transparent) 55%,
+    transparent 80%
+  );
+  box-shadow: 0 0 10px color-mix(in srgb, var(--orb-violet) 55%, transparent);
+}
+
+.orb-shadow::after {
+  inset: 26%;
+  border-color: color-mix(in srgb, var(--orb-cyan) 50%, transparent);
+  background: radial-gradient(
+    ellipse at center,
+    color-mix(in srgb, var(--orb-cyan) 50%, transparent) 0%,
+    color-mix(in srgb, var(--orb-cyan) 20%, transparent) 55%,
+    transparent 80%
+  );
+  box-shadow: 0 0 8px color-mix(in srgb, var(--orb-cyan) 45%, transparent);
 }

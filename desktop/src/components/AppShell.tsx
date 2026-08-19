@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
+  LayoutDashboard,
   ShieldCheck,
   KeyRound,
   KeySquare,
@@ -17,6 +18,7 @@ import { cn } from '@/lib/utils';
 import { useAuth } from '@/stores/auth';
 import { useAppMode } from '@/stores/app-mode';
 import { useSearch } from '@/stores/search';
+import { DashboardPage } from '@/pages/DashboardPage';
 import { ProjectsPage } from '@/pages/ProjectsPage';
 import { CredentialsPage } from '@/pages/CredentialsPage';
 import { EnvFilesPage } from '@/pages/EnvFilesPage';
@@ -27,6 +29,7 @@ import { SshKeysPage } from '@/pages/SshKeysPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 
 type PageId =
+  | 'dashboard'
   | 'projects'
   | 'credentials'
   | 'env'
@@ -44,6 +47,7 @@ interface NavItem {
 }
 
 const NAV: NavItem[] = [
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, placeholder: 'Search vault…' },
   { id: 'projects', label: 'Projects', icon: FolderLock, placeholder: 'Search projects…' },
   { id: 'credentials', label: 'Credentials', icon: KeyRound, placeholder: 'Search credentials…' },
   { id: 'env', label: 'Env Files', icon: FileLock2, placeholder: 'Search env files…' },
@@ -53,7 +57,7 @@ const NAV: NavItem[] = [
   { id: 'ssh-keys', label: 'SSH Keys', icon: TerminalSquare, placeholder: 'Search SSH keys…' },
 ];
 
-const PAGES: Record<PageId, React.ComponentType> = {
+const PAGES: Partial<Record<PageId, React.ComponentType>> = {
   projects: ProjectsPage,
   credentials: CredentialsPage,
   env: EnvFilesPage,
@@ -65,7 +69,7 @@ const PAGES: Record<PageId, React.ComponentType> = {
 };
 
 export function AppShell() {
-  const [active, setActive] = useState<PageId>('projects');
+  const [active, setActive] = useState<PageId>('dashboard');
   const email = useAuth((s) => s.email);
   const logout = useAuth((s) => s.logout);
   const sandbox = useAppMode((s) => s.sandbox);
@@ -82,7 +86,7 @@ export function AppShell() {
     clear();
   }, [active, clear]);
 
-  const showSearch = active !== 'settings';
+  const showSearch = active !== 'settings' && active !== 'dashboard';
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden">
@@ -92,7 +96,11 @@ export function AppShell() {
         style={{ backgroundColor: 'var(--color-surface)', borderBottom: '1px solid var(--color-border)' }}
       >
         <div className="flex items-center gap-2">
-          <img src="/cloak.png" alt="" className="h-5 w-5" />
+          <img
+            src="/cloak.png"
+            alt=""
+            className="h-5 w-5 dark:brightness-0 dark:invert"
+          />
           <span className="text-sm font-medium tracking-tight">Cloak</span>
         </div>
 
@@ -183,7 +191,7 @@ export function AppShell() {
                 transition={{ duration: 0.15 }}
                 className="h-full"
               >
-                <Page />
+                {active === 'dashboard' ? <DashboardPage onNavigate={setActive} /> : Page && <Page />}
               </motion.div>
             </AnimatePresence>
           </div>
