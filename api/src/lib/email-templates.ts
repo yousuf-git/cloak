@@ -11,6 +11,12 @@ const MUTED = '#6b7280';
 const BORDER = '#e4e6ea';
 const CANVAS = '#f6f7f9';
 
+const APP_URL = 'https://cloak.commit4solutions.com';
+// Same artwork as the README header (.github/assets/cloak-logo.png), copied to
+// web/public/cloak-logo.png so the marketing site serves it — email clients
+// can't reach a local repo file, only a public URL.
+const LOGO_URL = `${APP_URL}/cloak-logo.png`;
+
 interface EmailContent {
   preheader: string;
   heading: string;
@@ -24,10 +30,20 @@ interface EmailContent {
 }
 
 function shieldLogo(): string {
-  // Inline SVG shield; degrades to the "Cloak" wordmark if stripped.
+  // Colour artwork on a white chip — the dark header would swallow it
+  // otherwise. Table layout + valign attrs for old Outlook; alt text is the
+  // fallback when images are blocked.
   return `
-    <span style="display:inline-block;vertical-align:middle;width:28px;height:28px;background:${BRAND};border-radius:8px;text-align:center;line-height:28px;color:#ffffff;font-weight:700;font-family:Arial,Helvetica,sans-serif;font-size:15px;">C</span>
-    <span style="display:inline-block;vertical-align:middle;margin-left:10px;font-family:Arial,Helvetica,sans-serif;font-size:18px;font-weight:700;letter-spacing:-0.2px;color:#ffffff;">Cloak</span>`;
+    <table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+      <tr>
+        <td width="32" height="32" valign="middle" align="center" style="width:32px;height:32px;background:#ffffff;border-radius:8px;">
+          <img src="${LOGO_URL}" width="22" height="22" alt="Cloak" style="display:block;border:0;">
+        </td>
+        <td valign="middle" style="padding-left:10px;font-family:Arial,Helvetica,sans-serif;font-size:18px;font-weight:700;letter-spacing:-0.2px;color:#ffffff;">
+          Cloak
+        </td>
+      </tr>
+    </table>`;
 }
 
 export function renderEmail(c: EmailContent): string {
@@ -100,6 +116,9 @@ export function renderEmail(c: EmailContent): string {
               <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;color:${MUTED};">
                 Cloak is a zero-knowledge vault — we never see your master password or your secrets.
                 You're receiving this because someone used this address to access Cloak.
+              </p>
+              <p style="margin:10px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;">
+                <a href="${APP_URL}" style="color:${BRAND};text-decoration:none;">${APP_URL.replace('https://', '')}</a>
               </p>
             </td>
           </tr>
