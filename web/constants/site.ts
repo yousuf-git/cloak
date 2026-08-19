@@ -3,7 +3,7 @@ export const SITE = {
   tagline: "Zero-knowledge secrets for developers",
   description:
     "Zero-knowledge secrets manager for developers. Native desktop vault for credentials, API keys, SSH keys, and encrypted .env files — plaintext never leaves your machine.",
-  url: "https://cloak.app",
+  url: "https://cloak.commit4solutions.com",
   repo: "https://github.com/yousuf-git/cloak",
   repoApi: "https://api.github.com/repos/yousuf-git/cloak",
   license: "MIT",
