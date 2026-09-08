@@ -6,29 +6,16 @@ vi.mock('../src/services/email.service.js', () => ({
   sendOtpEmail: vi.fn(async () => {}),
   sendVerificationEmail: vi.fn(async () => {}),
   sendRecoveryEmail: vi.fn(async () => {}),
+  sendInvitationEmail: vi.fn(async () => {}),
 }));
 
 const { createApp } = await import('../src/app.js');
+const { createAccount } = await import('./helpers.js');
 const app = createApp();
 
-const SIGNUP = {
-  email: 'vault@example.com',
-  authHash: 'YXV0aA==',
-  cryptoSalt: 'c29tZS1zYWx0LTE2Ynl0ZXNfXw==',
-  wrappedDEK: 'd3JhcHBlZA==',
-  recoveryWrappedDEK: 'cmVjb3Zlcnk=',
-};
-
-let token = '';
-
 async function authHeader() {
-  await request(app).post('/api/v1/auth/signup').send(SIGNUP).expect(201);
-  const login = await request(app)
-    .post('/api/v1/auth/login')
-    .send({ email: SIGNUP.email, authHash: SIGNUP.authHash })
-    .expect(200);
-  token = login.body.data.accessToken;
-  return { Authorization: `Bearer ${token}` };
+  const account = await createAccount(app, 'vault@example.com');
+  return account.headers;
 }
 
 beforeAll(async () => {
@@ -102,11 +89,63 @@ describe('vault platforms + backup codes', () => {
 });
 
 describe('vault projects', () => {
-  it('creates and lists embedded projects', async () => {
+  it('creates and lists org-owned projects', async () => {
     const h = await authHeader();
     await request(app).post('/api/v1/vault/projects').set(h).send({ name: 'Aurora' }).expect(201);
     const list = await request(app).get('/api/v1/vault/projects').set(h).expect(200);
     expect(list.body.data).toHaveLength(1);
     expect(list.body.data[0].name).toBe('Aurora');
+  });
+});
+
+describe('org scoping', () => {
+  it('rejects a request with no org header', async () => {
+    const account = await createAccount(app, 'noorg@example.com');
+    await request(app)
+      .get('/api/v1/vault/creds')
+      .set({ Authorization: `Bearer ${account.token}` })
+      .expect(400);
+  });
+
+  it('does not leak one org\'s secrets to a member of another', async () => {
+    const alice = await createAccount(app, 'alice@example.com');
+    const bob = await createAccount(app, 'bob@example.com');
+
+    await request(app)
+      .post('/api/v1/vault/creds')
+      .set(alice.headers)
+      .send({ name: 'Alice secret', username: 'YQ==', password: 'Y2lwaGVy' })
+      .expect(201);
+
+    const bobsView = await request(app).get('/api/v1/vault/creds').set(bob.headers).expect(200);
+    expect(bobsView.body.data).toHaveLength(0);
+
+    // Bob naming Alice's org outright is rejected: he has no membership in it.
+    await request(app)
+      .get('/api/v1/vault/creds')
+      .set({ Authorization: `Bearer ${bob.token}`, 'X-Cloak-Org': alice.orgId })
+      .expect(403);
+  });
+
+  it('refuses a project id belonging to another org', async () => {
+    const alice = await createAccount(app, 'alice2@example.com');
+    const bob = await createAccount(app, 'bob2@example.com');
+
+    const project = await request(app)
+      .post('/api/v1/vault/projects')
+      .set(alice.headers)
+      .send({ name: 'Aurora' })
+      .expect(201);
+
+    await request(app)
+      .post('/api/v1/vault/creds')
+      .set(bob.headers)
+      .send({
+        name: 'Cross-org',
+        username: 'YQ==',
+        password: 'Y2lwaGVy',
+        project_id: project.body.data._id,
+      })
+      .expect(400);
   });
 });

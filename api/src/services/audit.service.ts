@@ -5,6 +5,7 @@ import { logger } from '../lib/logger.js';
 
 interface AuditInput {
   action: string;
+  orgId?: Types.ObjectId | string | null;
   userId?: Types.ObjectId | string | null;
   resource?: string;
   resourceId?: string;
@@ -15,9 +16,10 @@ interface AuditInput {
  * Record a sensitive-mutation audit entry (metadata only — never secret
  * payloads). Failures are logged but never block the request flow.
  */
-export async function recordAudit({ action, userId, resource, resourceId, req }: AuditInput): Promise<void> {
+export async function recordAudit({ action, orgId, userId, resource, resourceId, req }: AuditInput): Promise<void> {
   try {
     await AuditLog.create({
+      org_id: orgId ? new Types.ObjectId(orgId) : undefined,
       user_id: userId ? new Types.ObjectId(userId) : undefined,
       action,
       resource,

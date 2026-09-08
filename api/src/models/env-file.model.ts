@@ -3,7 +3,8 @@ import { Schema, model, type Types } from 'mongoose';
 export type EnvTag = 'Local' | 'Staging' | 'Production' | 'Custom';
 
 export interface EnvFileDoc {
-  user_id: Types.ObjectId;
+  org_id: Types.ObjectId;
+  created_by: Types.ObjectId;
   project_id: Types.ObjectId;
   label: string;
   tag: EnvTag;
@@ -20,8 +21,9 @@ export interface EnvFileDoc {
 
 const envFileSchema = new Schema<EnvFileDoc>(
   {
-    user_id: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
-    project_id: { type: Schema.Types.ObjectId, required: true, index: true },
+    org_id: { type: Schema.Types.ObjectId, ref: 'Org', required: true, index: true },
+    created_by: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    project_id: { type: Schema.Types.ObjectId, ref: 'Project', required: true, index: true },
     label: { type: String, required: true, trim: true },
     tag: { type: String, enum: ['Local', 'Staging', 'Production', 'Custom'], default: 'Local' },
     encrypted_dotenvx_key: { type: String, default: null },
@@ -30,5 +32,7 @@ const envFileSchema = new Schema<EnvFileDoc>(
   },
   { timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } },
 );
+
+envFileSchema.index({ org_id: 1, created_at: -1 });
 
 export const EnvFile = model<EnvFileDoc>('EnvFile', envFileSchema);

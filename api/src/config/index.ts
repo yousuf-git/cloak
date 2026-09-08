@@ -14,6 +14,9 @@ const envSchema = z.object({
   REFRESH_TOKEN_TTL: z.string().default('30d'),
 
   OTP_TTL_SECONDS: z.coerce.number().int().positive().default(600),
+  INVITATION_TTL_DAYS: z.coerce.number().int().positive().default(7),
+  // Drives the audit log's TTL index. Changing it rebuilds that index.
+  AUDIT_RETENTION_DAYS: z.coerce.number().int().positive().default(365),
 
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(15 * 60 * 1000),
   // Failed auth/OTP attempts allowed per window (successful requests don't count).

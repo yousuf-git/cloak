@@ -1,16 +1,15 @@
-import type { Types } from 'mongoose';
 import { EnvFile, type EnvTag } from '../models/env-file.model.js';
-import { NotFoundError } from '../lib/errors.js';
-
-type Owner = Types.ObjectId | string;
+import { Project } from '../models/project.model.js';
+import { NotFoundError, ValidationError } from '../lib/errors.js';
+import type { Scope } from './vault.service.js';
 
 /** The blob is base64-transported; we persist the decoded text. */
 function decodeBlob(contentB64: string): string {
   return Buffer.from(contentB64, 'base64').toString('utf8');
 }
 
-export function listEnvFiles(userId: Owner, projectId?: string) {
-  const filter: Record<string, unknown> = { user_id: userId };
+export function listEnvFiles({ orgId }: Scope, projectId?: string) {
+  const filter: Record<string, unknown> = { org_id: orgId };
   if (projectId) filter.project_id = projectId;
   // Exclude the (large) content blob from list responses; fetched on demand.
   return EnvFile.find(filter).select('-content').sort({ created_at: -1 }).lean();
@@ -25,9 +24,13 @@ export interface CreateEnvInput {
   variable_count: number;
 }
 
-export async function createEnvFile(userId: Owner, input: CreateEnvInput) {
+export async function createEnvFile({ orgId, userId }: Scope, input: CreateEnvInput) {
+  const project = await Project.exists({ _id: input.project_id, org_id: orgId });
+  if (!project) throw new ValidationError('Unknown project for this organization');
+
   const doc = await EnvFile.create({
-    user_id: userId,
+    org_id: orgId,
+    created_by: userId,
     project_id: input.project_id,
     label: input.label,
     tag: input.tag,
@@ -41,8 +44,8 @@ export async function createEnvFile(userId: Owner, input: CreateEnvInput) {
   return obj;
 }
 
-export async function getEnvRaw(userId: Owner, id: string): Promise<string> {
-  const doc = await EnvFile.findOne({ _id: id, user_id: userId }).select('content');
+export async function getEnvRaw({ orgId }: Scope, id: string): Promise<string> {
+  const doc = await EnvFile.findOne({ _id: id, org_id: orgId }).select('content');
   if (!doc) throw new NotFoundError('Env file not found');
   return doc.content;
 }
@@ -55,8 +58,8 @@ export interface UpdateEnvInput {
   variable_count?: number;
 }
 
-export async function updateEnvFile(userId: Owner, id: string, input: UpdateEnvInput) {
-  const doc = await EnvFile.findOne({ _id: id, user_id: userId });
+export async function updateEnvFile({ orgId }: Scope, id: string, input: UpdateEnvInput) {
+  const doc = await EnvFile.findOne({ _id: id, org_id: orgId });
   if (!doc) throw new NotFoundError('Env file not found');
 
   if (input.content_b64 !== undefined) doc.content = decodeBlob(input.content_b64);
@@ -71,7 +74,7 @@ export async function updateEnvFile(userId: Owner, id: string, input: UpdateEnvI
   return obj;
 }
 
-export async function deleteEnvFile(userId: Owner, id: string) {
-  const res = await EnvFile.deleteOne({ _id: id, user_id: userId });
+export async function deleteEnvFile({ orgId }: Scope, id: string) {
+  const res = await EnvFile.deleteOne({ _id: id, org_id: orgId });
   if (res.deletedCount === 0) throw new NotFoundError('Env file not found');
 }

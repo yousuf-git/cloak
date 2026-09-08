@@ -7,7 +7,9 @@ export interface BackupCodeSubdoc {
 }
 
 export interface PlatformDoc {
-  user_id: Types.ObjectId;
+  org_id: Types.ObjectId;
+  created_by: Types.ObjectId;
+  project_id?: Types.ObjectId;
   name: string;
   note?: string;
   backup_codes: Types.DocumentArray<BackupCodeSubdoc>;
@@ -27,12 +29,16 @@ const backupCodeSchema = new Schema<BackupCodeSubdoc>(
 
 const platformSchema = new Schema<PlatformDoc>(
   {
-    user_id: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+    org_id: { type: Schema.Types.ObjectId, ref: 'Org', required: true, index: true },
+    created_by: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    project_id: { type: Schema.Types.ObjectId, ref: 'Project', index: true },
     name: { type: String, required: true, trim: true },
     note: { type: String, trim: true },
     backup_codes: { type: [backupCodeSchema], default: [] },
   },
   { timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } },
 );
+
+platformSchema.index({ org_id: 1, created_at: -1 });
 
 export const Platform = model<PlatformDoc>('Platform', platformSchema);

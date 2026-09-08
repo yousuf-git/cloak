@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { requireAuth } from '../middlewares/require-auth.js';
+import { requireOrg } from '../middlewares/require-org.js';
 import { validate } from '../middlewares/validate.js';
 import {
   idParamSchema,
@@ -25,7 +26,9 @@ import {
 import * as v from '../controllers/vault.controller.js';
 
 export const vaultRouter = Router();
-vaultRouter.use(requireAuth);
+// Every vault resource belongs to an org; requireOrg resolves which one and
+// the caller's role in it before any handler runs.
+vaultRouter.use(requireAuth, requireOrg);
 
 // Credentials
 vaultRouter.get('/creds', v.listCreds);

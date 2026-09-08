@@ -1,7 +1,8 @@
 import { Schema, model, type Types } from 'mongoose';
 
 export interface ApiKeyDoc {
-  user_id: Types.ObjectId;
+  org_id: Types.ObjectId;
+  created_by: Types.ObjectId;
   project_id?: Types.ObjectId;
   label: string;
   url?: string;
@@ -14,8 +15,9 @@ export interface ApiKeyDoc {
 
 const apiKeySchema = new Schema<ApiKeyDoc>(
   {
-    user_id: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
-    project_id: { type: Schema.Types.ObjectId, index: true },
+    org_id: { type: Schema.Types.ObjectId, ref: 'Org', required: true, index: true },
+    created_by: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    project_id: { type: Schema.Types.ObjectId, ref: 'Project', index: true },
     label: { type: String, required: true, trim: true },
     url: { type: String, trim: true },
     key: { type: String, required: true },
@@ -23,5 +25,7 @@ const apiKeySchema = new Schema<ApiKeyDoc>(
   },
   { timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } },
 );
+
+apiKeySchema.index({ org_id: 1, created_at: -1 });
 
 export const ApiKey = model<ApiKeyDoc>('ApiKey', apiKeySchema);

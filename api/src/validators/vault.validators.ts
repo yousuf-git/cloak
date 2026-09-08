@@ -74,11 +74,13 @@ export const sshKeyUpdateSchema = z
 export const platformCreateSchema = z.object({
   name: shortText,
   note: optionalText,
+  project_id: objectId.optional(),
   backup_codes: z.array(z.object({ encrypted_code: cipher })).max(50).optional(),
 });
 export const platformUpdateSchema = z.object({
   name: shortText.optional(),
   note: optionalText,
+  project_id: objectId.optional(),
 });
 export const backupCodesAddSchema = z.object({
   backup_codes: z.array(z.object({ encrypted_code: cipher })).min(1).max(50),
