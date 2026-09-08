@@ -1,9 +1,13 @@
-# Teams & Business Roadmap (not yet implemented)
+# Teams & Business Roadmap (implemented)
 
-Parked feature direction: multi-user / team support. Captured from a discussion of
-where consumer-grade tools (Google Password Manager specifically) fall short for
-business use — each gap below is a candidate Cloak feature. Nothing here is
-scheduled; v1 remains a single-user vault.
+Multi-user / team support. Captured from a discussion of where consumer-grade
+tools (Google Password Manager specifically) fall short for business use — each
+gap below became a Cloak feature.
+
+**Status: built.** See `docs/TEAMS_ARCHITECTURE.md` for how it works and what it
+deliberately does not do (notably: removing a member does not rotate the
+organization key). `docs/TEAMS_IMPLEMENTATION_PLAN.md` records the plan this was
+built from.
 
 ## Why consumer password managers fail teams
 
@@ -28,23 +32,25 @@ freelancers on convenience and price, but they are designed for individuals:
 
 | # | Gap | Cloak candidate | Current state |
 |---|-----|-----------------|---------------|
-| 1 | RBAC | Org/workspace entity with roles (owner / admin / member / read-only) enforced server-side per vault resource | Single user owns all resources (`user_id` scoping only) |
-| 2 | Audit trails | Per-org audit views + retention; export for compliance | `AuditLog` model already records metadata-only mutations (`api/src/models/audit-log.model.ts`) — single-user, no UI |
-| 3 | Multi-user / delegation | Invitations, membership, admin-managed access; delegated project ownership | None |
-| 4 | Secure sharing | Wrap the item DEK for the recipient's public key (asymmetric envelope per member) — keeps zero-knowledge intact; no plaintext ever server-side | Per-user Vault DEK only |
-| 5 | Account compromise / offboarding | Org-owned vaults survive member removal; re-wrap DEKs on membership change instead of CSV export/import; break-glass recovery for org owners | Vault dies with the account (recovery key aside) |
+| 1 | RBAC | Org entity with roles (owner / admin / member / viewer) enforced server-side | Built — `api/src/lib/permissions.ts`, `api/src/middlewares/require-org.ts` |
+| 2 | Audit trails | Per-org audit view + retention + CSV export | Built — `AuditLog.org_id`, `GET /orgs/:id/audit`, Audit Log page |
+| 3 | Multi-user / delegation | Invitations, membership, admin-managed access, ownership transfer | Built — `api/src/services/{org,invitation}.service.ts`, Team page |
+| 4 | Secure sharing | Org DEK sealed to each member's X25519 public key, client-side only | Built — `desktop/src-tauri/src/crypto/identity.rs` |
+| 5 | Account compromise / offboarding | Org-owned vaults survive member removal; break-glass recovery for owners | Partly built — removal revokes access but does **not** rotate the Org DEK; see the deferred-rotation note in `docs/TEAMS_ARCHITECTURE.md` |
 
 ## Constraints to respect when designing
 
 - **Zero-knowledge must survive teams.** Sharing = client-side re-wrapping of
   data keys for member public keys. The server must never gain decrypt ability.
-- **Offboarding = key rotation.** Removing a member requires re-wrapping (and
-  ideally rotating) shared DEKs, not just revoking API access.
+- **Offboarding = key rotation.** Removing a member should re-wrap (and ideally
+  rotate) shared DEKs, not just revoke API access. **This one is not yet met:**
+  the shipped removal path revokes server access only. Deliberate, and written
+  up in `docs/TEAMS_ARCHITECTURE.md`.
 - **Audit stays metadata-only.** Never log secret plaintext or ciphertext —
   same rule the existing `AuditLog` follows.
 
-## Marketing angle (when built)
+## Marketing angle
 
 The "Why Cloak" comparison matrix on the web (`web/content/site-content.ts`,
-`WHY_MATRIX`) gains team-feature rows (RBAC, audit trails, secure sharing) where
-consumer password managers score "no".
+`WHY_MATRIX`) carries team-feature rows (RBAC, audit trails, secure team
+sharing) where consumer password managers score "no".

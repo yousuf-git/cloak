@@ -634,21 +634,61 @@ network — the server saw one OTP, one token, and four opaque strings.
 
 ---
 
+## 8b. Flow G — Organization unlock (teams)
+
+Every account belongs to at least one organization, and every secret is encrypted under that
+organization's DEK rather than the account's own. Two hops are added after the personal unlock in
+Flow B; the personal DEK's only remaining job is wrapping the identity secret key.
+
+```
+password ─Flow B─▶ MasterKey ─open(User.wrappedDEK)──▶ personal DEK
+personal DEK      ─open(User.wrapped_identity_sk)────▶ identity secret key   (X25519)
+identity sk       ─unseal(Membership.wrapped_org_dek)▶ Org DEK               (per org)
+Org DEK           ─open(cred.password)───────────────▶ plaintext
+```
+
+Client sequence after `crypto_unlock_session` succeeds (`desktop/src/stores/org.ts`):
+
+1. `GET /me` → `wrapped_identity_sk`; `crypto_load_identity` unwraps it into the Rust session. An
+   account created before teams has none, so the client mints one with `crypto_create_identity` and
+   publishes the public half to `POST /me/identity`.
+2. `GET /orgs` → one row per active membership, each carrying that user's own
+   `wrapped_org_dek` — the Org DEK sealed to their public key.
+3. `crypto_load_org(orgId, wrapped_org_dek)` per row, opening each sealed box and holding the Org
+   DEK in `CryptoSession.org_deks`.
+4. Vault calls send `X-Cloak-Org`; `crypto_encrypt_field` / `crypto_decrypt_field` take an `orgId`
+   and select the matching key.
+
+Sealing is the libsodium **sealed box** (`crypto_box`, X25519 + XSalsa20-Poly1305) in
+`desktop/src-tauri/src/crypto/identity.rs`. The sender needs no keypair, which is what lets an
+admin wrap the Org DEK for a joining member. The server can never do it: it holds public keys and
+opaque wraps, nothing else. Full treatment in [`TEAMS_ARCHITECTURE.md`](./TEAMS_ARCHITECTURE.md).
+
+---
+
 ## 9. Data-at-rest summary
 
 What an attacker with full DB read access actually sees:
 
 | Collection | Encrypted (opaque) | Plaintext (searchable metadata) |
 |-----------|--------------------|--------------------------------|
-| `users` | `wrappedDEK`, `recovery_wrappedDEK`, `password_hash`¹ | `email`, `crypto_salt`, `two_factor_enabled`, `projects[]` |
-| `creds` | `password` | `name`, `url`, `username`, `note` |
-| `api-keys` | `key` | `label`, `url`, `note` |
-| `platform` | `backup_codes[].encrypted_code` | `name`, `note` |
-| `env-file` | `content` (dotenvx blob), `encrypted_dotenvx_key` | `label`, `tag`, `variable_count`, `project_id` |
-| `audit-log` | — | who/action/resource/ip/ua/when only — **never** any secret |
+| `users` | `wrappedDEK`, `recovery_wrappedDEK`, `wrapped_identity_sk`, `password_hash`¹ | `email`, `crypto_salt`, `identity_public_key`², `two_factor_enabled` |
+| `orgs` | `org_recovery_wrappedDEK` | `name`, `owner_id`, `org_recovery_salt` |
+| `memberships` | `wrapped_org_dek` | `org_id`, `user_id`, `role`, `status` |
+| `invitations` | — | `org_id`, `email`, `role`, `token_hash`³, `expires_at` |
+| `creds` | `password` | `org_id`, `name`, `url`, `username`, `note` |
+| `api-keys` | `key` | `org_id`, `label`, `url`, `note` |
+| `platform` | `backup_codes[].encrypted_code` | `org_id`, `name`, `note` |
+| `env-file` | `content` (dotenvx blob), `encrypted_dotenvx_key` | `org_id`, `label`, `tag`, `variable_count`, `project_id` |
+| `audit-log` | — | org/who/action/resource/ip/ua/when only — **never** any secret |
 
 ¹ `password_hash` is `argon2id(authHash)` — not encrypted, but a one-way hash of an already-derived
 value, so it is neither the password nor a replayable login token.
+
+² `identity_public_key` is public by design: the server serves it to other members so they can seal
+an Org DEK to it. Only the secret half is wrapped.
+
+³ Invitation tokens are stored as `sha256(token)`, the same treatment refresh tokens get.
 
 Server-side redaction ([`PLAN.md` §7.1](../PLAN.md)) keeps `password`, `token`, `authHash`,
 `wrappedDEK`, `refreshToken` out of logs.
