@@ -37,14 +37,21 @@ export function sendOtpEmail(to: string, code: string): Promise<void> {
   const mins = ttlMinutes();
   const subject = 'Your Cloak sign-in code';
   const text = `Your Cloak one-time code is ${code}. It expires in ${mins} minutes. If you didn't request this, ignore this email.`;
-  const html = renderEmail({
+  const html = renderEmail('otp', {
+    subject,
     preheader: `Your Cloak code is ${code}`,
-    heading: 'Confirm your sign-in',
-    intro: 'Use the one-time code below to finish signing in to your vault.',
+    hero: 'code',
+    codeLabel: 'One-time sign-in code',
     code,
-    codeCaption: `Expires in ${mins} minutes`,
-    footerNote:
-      "If you didn't try to sign in, you can safely ignore this email — your vault stays locked without this code.",
+    codeCaption: `Expires in ${mins} min`,
+    heading: 'Confirm it\u2019s you',
+    intro: 'Enter this in the app to finish signing in.',
+    specs: [
+      { label: 'Valid for', value: `${mins} minutes` },
+      { label: 'Uses', value: 'once' },
+      { label: 'Vault', value: 'stays locked until entered' },
+    ],
+    note: "Didn't try to sign in? Ignore this email — the code is useless on its own.",
   });
   return send(to, subject, html, text);
 }
@@ -53,15 +60,21 @@ export function sendVerificationEmail(to: string, code: string): Promise<void> {
   const mins = ttlMinutes();
   const subject = 'Verify your Cloak account';
   const text = `Welcome to Cloak. Your email verification code is ${code}. It expires in ${mins} minutes.`;
-  const html = renderEmail({
+  const html = renderEmail('verify', {
+    subject,
     preheader: `Verify your email — code ${code}`,
-    heading: 'Welcome to Cloak',
-    intro: 'Enter this code in the app to verify your email and activate your vault.',
+    hero: 'code',
+    codeLabel: 'Email verification code',
     code,
-    codeCaption: `Expires in ${mins} minutes`,
-    body: [
-      'Cloak encrypts everything on your device before it ever reaches our servers — this step just confirms your email is really yours.',
+    codeCaption: `Expires in ${mins} min`,
+    heading: 'Welcome to Cloak',
+    intro: 'Enter this in the app to activate your vault.',
+    specs: [
+      { label: 'Valid for', value: `${mins} minutes` },
+      { label: 'Encryption', value: 'on your device' },
+      { label: 'We store', value: 'ciphertext only' },
     ],
+    note: 'Your vault stays locked until this address is verified.',
   });
   return send(to, subject, html, text);
 }
@@ -70,14 +83,57 @@ export function sendRecoveryEmail(to: string, code: string): Promise<void> {
   const mins = ttlMinutes();
   const subject = 'Recover your Cloak vault';
   const text = `Your Cloak recovery code is ${code}. It expires in ${mins} minutes. You'll also need your recovery key to restore access.`;
-  const html = renderEmail({
+  const html = renderEmail('recovery', {
+    subject,
     preheader: `Your Cloak recovery code is ${code}`,
-    heading: 'Recover your vault',
-    intro: 'Enter this code in the app to confirm it\u2019s you. You\u2019ll then use your recovery key to set a new master password.',
+    hero: 'code',
+    codeLabel: 'Account recovery code',
     code,
-    codeCaption: `Expires in ${mins} minutes`,
-    footerNote:
-      "If you didn't request account recovery, ignore this email and consider changing your master password — this code alone can't unlock your vault.",
+    codeCaption: `Expires in ${mins} min`,
+    heading: 'Recover your vault',
+    intro: 'This confirms you control this inbox. Your recovery key does the rest.',
+    specs: [
+      { label: 'Valid for', value: `${mins} minutes` },
+      { label: 'Also required', value: 'your recovery key' },
+      { label: 'This code alone', value: 'cannot unlock anything' },
+    ],
+    note: "Didn't request recovery? Ignore this email and consider changing your master password.",
+  });
+  return send(to, subject, html, text);
+}
+
+export function sendInvitationEmail(
+  to: string,
+  orgName: string,
+  role: string,
+  token: string,
+): Promise<void> {
+  const days = config.INVITATION_TTL_DAYS;
+  const subject = `You've been invited to ${orgName} on Cloak`;
+  const text =
+    `You've been invited to join ${orgName} on Cloak as ${role}. ` +
+    `Open Cloak, sign in with this email address, and enter this invitation code: ${token}. ` +
+    `It expires in ${days} days.`;
+  const html = renderEmail('invitation', {
+    subject,
+    preheader: `Join ${orgName} on Cloak`,
+    hero: 'invite',
+    codeLabel: "You've been invited to",
+    orgName,
+    role,
+    code: token,
+    codeCaption: `Expires in ${days} days`,
+    heading: 'Joining takes two steps',
+    intro: 'Open Cloak, sign in with this email address, and enter the code above to accept.',
+    paragraphs: [
+      "Accepting does not unlock anything on its own \u2014 an admin still has to seal the organization's key to your device. That second step is what keeps these secrets unreadable to our servers.",
+    ],
+    specs: [
+      { label: 'Step 1', value: 'you enter the code' },
+      { label: 'Step 2', value: 'an admin grants the key' },
+      { label: 'Until then', value: 'nothing is readable' },
+    ],
+    note: "Weren't expecting this? Ignore it — nothing is shared with you until you accept.",
   });
   return send(to, subject, html, text);
 }

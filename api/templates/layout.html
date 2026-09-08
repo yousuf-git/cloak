@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <!--
+    Dark by design. Declaring both schemes as "dark" stops Gmail and Apple Mail
+    running their own inversion pass over a palette that is already dark — that
+    pass is what turns deliberate dark emails into muddy grey ones.
+  -->
+  <meta name="color-scheme" content="dark">
+  <meta name="supported-color-schemes" content="dark">
+  <title>{{subject}}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#06070a;color-scheme:dark;">
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;">{{preheader}}</div>
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;">&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;</div>
+
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#06070a" style="background-color:#06070a;background-image:radial-gradient(120% 80% at 50% 0%,#12111f 0%,#0a0a11 45%,#06070a 100%);">
+    <tr>
+      <td align="center" style="padding:36px 12px 44px;">
+        <table role="presentation" width="580" cellpadding="0" cellspacing="0" border="0" style="width:580px;max-width:100%;">
+
+          <!--
+            Issue strip. Reads as a document header rather than a marketing
+            banner: who issued it, and when. The timestamp is real send data.
+          -->
+          <tr>
+            <td style="padding:0 2px 12px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td align="left">
+                    <!-- Same lockup as the app's auth screen: bare mono mark, no
+                         plate, wordmark in the display face. -->
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td width="26" valign="middle" style="width:26px;">
+                          <img src="{{logoUrl}}" width="26" height="26" alt="Cloak" style="display:block;border:0;">
+                        </td>
+                        <td valign="middle" style="padding-left:10px;font-family:'Space Grotesk','Avenir Next','Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:17px;font-weight:700;letter-spacing:-0.4px;color:#f4f5f7;">
+                          Cloak
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                  <td align="right" style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,monospace;font-size:10px;letter-spacing:1.6px;text-transform:uppercase;color:#5a606b;">
+                    {{issuedAt}}
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Asymmetric accent tab: a short bar over the left edge of the card. -->
+          <tr>
+            <td style="padding:0 2px;font-size:0;line-height:0;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td width="96" height="3" bgcolor="#8067cf" style="width:96px;height:3px;font-size:0;line-height:0;background-color:#8067cf;background-image:linear-gradient(90deg,#a78bfa 0%,#8067cf 45%,#6e7480 100%);">&nbsp;</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Card -->
+          <tr>
+            <td bgcolor="#0d0f14" style="background-color:#0d0f14;background-image:linear-gradient(180deg,#151922 0%,#0e1116 38%,#0a0c11 100%);border:1px solid #262b36;border-top-color:#3a4152;">
+
+              <!-- Specular glint across the top edge: silver through purple. -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td height="1" bgcolor="#2b303b" style="height:1px;font-size:0;line-height:0;background-color:#2b303b;background-image:linear-gradient(90deg,rgba(201,205,214,0) 0%,rgba(201,205,214,0.5) 22%,rgba(167,139,250,0.75) 52%,rgba(201,205,214,0.28) 74%,rgba(201,205,214,0) 100%);">&nbsp;</td>
+                </tr>
+              </table>
+
+              <!--
+                The hero comes first, before any greeting. Whatever this email is
+                asking for is the reason it was opened, so it leads.
+              -->
+              {{{hero}}}
+
+              <!-- Perforation: separates the actionable part from the reading part. -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="padding:0 34px;">
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                      <tr><td height="1" style="height:1px;font-size:0;line-height:0;border-top:1px dashed #262b36;">&nbsp;</td></tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Supporting copy, deliberately quieter than the hero. -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="padding:26px 34px 0;">
+                    <h1 style="margin:0 0 8px;font-family:'Space Grotesk','Avenir Next','Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:21px;line-height:27px;font-weight:700;letter-spacing:-0.5px;color:#f4f5f7;">{{heading}}</h1>
+                    <p style="margin:0;font-family:'Space Grotesk','Avenir Next','Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:14px;line-height:23px;color:#8b919b;">{{intro}}</p>
+                  </td>
+                </tr>
+              </table>
+
+              {{{content}}}
+
+              <!-- Footer, in the same mono voice as the issue strip. -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="padding:26px 34px 24px;">
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                      <tr><td height="1" bgcolor="#1e222b" style="height:1px;font-size:0;line-height:0;background-color:#1e222b;background-image:linear-gradient(90deg,rgba(201,205,214,0.22) 0%,rgba(201,205,214,0.06) 45%,rgba(201,205,214,0) 100%);">&nbsp;</td></tr>
+                    </table>
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:16px;">
+                      <tr>
+                        <td align="left" valign="top" style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,monospace;font-size:10px;line-height:17px;letter-spacing:0.3px;color:#5a606b;">
+                          Sent because this address was used to access Cloak.
+                        </td>
+                        <td align="right" valign="top" style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,monospace;font-size:10px;line-height:17px;white-space:nowrap;">
+                          <a href="{{appUrl}}" style="color:#8067cf;text-decoration:none;">{{appDomain}}</a>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

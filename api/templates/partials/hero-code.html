@@ -1,0 +1,39 @@
+<!--
+  The hero. Full-bleed panel, left-aligned rather than centred, so the code
+  starts on the same axis as everything below it instead of floating.
+
+  The code is one plain text run, not a cell per digit: selecting across table
+  cells drags tab characters along with the digits, which breaks the paste it is
+  there to serve. Letter-spacing gives it presence without touching the string.
+
+  Surfaces are layered: fine scanlines, a purple bloom raking in from the top
+  left, then the base gradient. Every layer degrades to the bgcolor in Outlook,
+  which drops background-image entirely.
+-->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#121620" style="background-color:#121620;background-image:repeating-linear-gradient(180deg,rgba(255,255,255,0.020) 0px,rgba(255,255,255,0.020) 1px,rgba(255,255,255,0) 1px,rgba(255,255,255,0) 3px),radial-gradient(120% 150% at 10% -10%,rgba(128,103,207,0.30) 0%,rgba(128,103,207,0.06) 46%,rgba(128,103,207,0) 68%),linear-gradient(180deg,#1a1f2c 0%,#121722 55%,#0d1119 100%);border-bottom:1px solid #262b36;">
+  <tr>
+    <td style="padding:26px 34px 30px;">
+
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td align="left" style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,monospace;font-size:10px;font-weight:600;letter-spacing:3px;text-transform:uppercase;color:#a78bfa;padding-bottom:14px;">
+            {{codeLabel}}
+          </td>
+          <td align="right" style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,monospace;font-size:10px;letter-spacing:1.8px;text-transform:uppercase;color:#7d8492;padding-bottom:14px;">
+            {{codeCaption}}
+          </td>
+        </tr>
+      </table>
+
+      <div style="font-family:'JetBrains Mono',ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,monospace;font-size:42px;line-height:52px;font-weight:600;letter-spacing:11px;color:#f6f7fa;text-shadow:0 0 18px rgba(167,139,250,0.35);">{{code}}</div>
+
+      <!-- Silver falloff under the code: catches the light, closes the block. -->
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:14px;">
+        <tr>
+          <td height="1" bgcolor="#2b303b" style="height:1px;font-size:0;line-height:0;background-color:#2b303b;background-image:linear-gradient(90deg,rgba(201,205,214,0.45) 0%,rgba(167,139,250,0.35) 30%,rgba(201,205,214,0) 78%);">&nbsp;</td>
+        </tr>
+      </table>
+
+    </td>
+  </tr>
+</table>

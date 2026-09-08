@@ -1,0 +1,20 @@
+<!--
+  Facts as a spec sheet rather than another paragraph of prose. Dotted leaders
+  tie each label to its value and give the block a document feel; scanning three
+  rows costs less than reading three sentences saying the same thing.
+-->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr>
+    <td style="padding:22px 34px 0;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+        {{#each specs}}
+        <tr>
+          <td valign="bottom" style="padding:0 0 9px;white-space:nowrap;font-family:'JetBrains Mono',ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,monospace;font-size:10px;letter-spacing:1.8px;text-transform:uppercase;color:#5a606b;">{{label}}</td>
+          <td valign="bottom" style="padding:0 8px 12px;width:100%;font-size:0;line-height:0;border-bottom:1px dotted #3a4150;">&nbsp;</td>
+          <td valign="bottom" align="right" style="padding:0 0 9px;white-space:nowrap;font-family:'JetBrains Mono',ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;letter-spacing:0.4px;color:#c9cdd4;">{{value}}</td>
+        </tr>
+        {{/each}}
+      </table>
+    </td>
+  </tr>
+</table>
