@@ -4,11 +4,11 @@ import { useAppMode } from '@/stores/app-mode';
 export function SandboxButton() {
   const enterSandbox = useAppMode((s) => s.enterSandbox);
   return (
-    <div className="mt-6 flex flex-col items-center gap-2 border-t pt-5" style={{ borderColor: 'var(--color-border)' }}>
+    <div className="mt-5 flex flex-col items-center gap-2 border-t pt-5" style={{ borderColor: 'var(--color-border-soft)' }}>
       <button
         type="button"
         onClick={enterSandbox}
-        className="no-drag inline-flex items-center gap-2 text-xs font-medium transition-opacity hover:opacity-70"
+        className="alloy-button no-drag inline-flex items-center gap-2 rounded-md px-3 py-2 text-xs font-semibold"
         style={{ color: 'var(--color-fg-muted)' }}
       >
         <PlayCircle className="h-4 w-4" />

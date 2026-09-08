@@ -19,22 +19,22 @@ export function Button({
   ...props
 }: ButtonProps) {
   const base =
-    'no-drag inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2';
+    'alloy-button no-drag inline-flex items-center justify-center gap-2 rounded-[var(--radius-md)] font-semibold tracking-[-0.01em] disabled:cursor-not-allowed disabled:opacity-50';
   const sizes: Record<Size, string> = {
     sm: 'h-8 px-3 text-xs',
     md: 'h-9 px-4 text-sm',
   };
   const variants: Record<Variant, string> = {
-    primary: 'text-white hover:brightness-110',
+    primary: 'alloy-button-primary text-white',
     ghost: 'hover:bg-black/5 dark:hover:bg-white/5',
-    outline: 'border hover:bg-black/5 dark:hover:bg-white/5',
-    danger: 'text-white hover:brightness-110',
+    outline: 'alloy-button-outline',
+    danger: 'alloy-button-danger text-white',
   };
   const styleByVariant: Record<Variant, React.CSSProperties> = {
-    primary: { backgroundColor: 'var(--color-brand-600)' },
+    primary: {},
     ghost: { color: 'var(--color-fg-muted)' },
-    outline: { borderColor: 'var(--color-border)', color: 'var(--color-fg)' },
-    danger: { backgroundColor: '#dc2626' },
+    outline: { color: 'var(--color-fg)' },
+    danger: {},
   };
 
   return (

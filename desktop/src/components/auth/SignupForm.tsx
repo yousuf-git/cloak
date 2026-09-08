@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Mail, Lock, ShieldAlert } from 'lucide-react';
+import { Mail, Lock, ShieldAlert, User } from 'lucide-react';
 import { useAuth } from '@/stores/auth';
 import { signupSchema, type SignupValues } from '@/lib/auth-schemas';
 import { TextField } from '@/components/ui/TextField';
@@ -25,14 +25,15 @@ export function SignupForm({ onSwitch }: { onSwitch: () => void }) {
     formState: { errors },
   } = useForm<SignupValues>({
     resolver: zodResolver(signupSchema),
-    defaultValues: { email: '', password: '', confirm: '', remember: false },
+    defaultValues: { name: '', email: '', password: '', confirm: '', remember: false },
   });
 
   useEffect(() => clearError(), [clearError]);
 
   const password = watch('password');
 
-  const onSubmit = (v: SignupValues) => signup(v.email.trim(), v.password, Boolean(v.remember));
+  const onSubmit = (v: SignupValues) =>
+    signup(v.name.trim(), v.email.trim(), v.password, Boolean(v.remember));
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
@@ -40,16 +41,27 @@ export function SignupForm({ onSwitch }: { onSwitch: () => void }) {
 
       <FormError message={error} />
 
-      <TextField
-        label="Email"
-        type="email"
-        autoFocus
-        autoComplete="username"
-        placeholder="you@company.com"
-        icon={<Mail className="h-4 w-4" />}
-        error={errors.email?.message}
-        {...register('email')}
-      />
+      {/* Paired on one row so the extra field does not push the card into a scroll. */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <TextField
+          label="Name"
+          autoFocus
+          autoComplete="name"
+          placeholder="Ada Lovelace"
+          icon={<User className="h-4 w-4" />}
+          error={errors.name?.message}
+          {...register('name')}
+        />
+        <TextField
+          label="Email"
+          type="email"
+          autoComplete="username"
+          placeholder="you@company.com"
+          icon={<Mail className="h-4 w-4" />}
+          error={errors.email?.message}
+          {...register('email')}
+        />
+      </div>
 
       <div className="flex flex-col gap-1.5">
         <TextField
@@ -94,9 +106,9 @@ export function SignupForm({ onSwitch }: { onSwitch: () => void }) {
         {busy ? 'Creating vault…' : 'Create vault'}
       </Button>
 
-      <p className="text-center text-xs" style={{ color: 'var(--color-fg-muted)' }}>
-        Already have a vault?{' '}
-        <button type="button" onClick={onSwitch} className="no-drag font-medium" style={{ color: 'var(--color-brand-500)' }}>
+      <p className="auth-alt">
+        Already have a vault?
+        <button type="button" onClick={onSwitch} className="auth-link no-drag">
           Sign in
         </button>
       </p>

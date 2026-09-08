@@ -80,17 +80,16 @@ export function CodeInput({
             onKeyDown={(e) => handleKeyDown(i, e)}
             onPaste={handlePaste}
             className={cn(
-              'no-drag h-12 w-11 rounded-lg border text-center text-lg font-semibold outline-none transition-colors focus:border-[var(--color-brand-500)]',
+              'alloy-field no-drag h-12 w-11 rounded-[var(--radius-md)] text-center font-mono text-lg font-semibold outline-none',
             )}
             style={{
-              backgroundColor: 'var(--color-surface-2)',
-              borderColor: error ? '#dc2626' : 'var(--color-border)',
+              borderColor: error ? 'var(--color-danger)' : undefined,
             }}
           />
         ))}
       </div>
       {error && (
-        <span className="text-center text-xs" style={{ color: '#dc2626' }}>
+        <span className="text-center text-xs" style={{ color: 'var(--color-danger)' }}>
           {error}
         </span>
       )}

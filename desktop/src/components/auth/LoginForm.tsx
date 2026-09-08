@@ -59,29 +59,23 @@ export function LoginForm({ onSwitch }: { onSwitch: () => void }) {
         {...register('password')}
       />
 
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <RememberToggle
           checked={Boolean(watch('remember'))}
           onChange={(v) => setValue('remember', v)}
         />
+        <button type="button" onClick={enterRecovery} className="auth-link no-drag text-xs">
+          Forgot your master password?
+        </button>
       </div>
 
       <Button type="submit" disabled={busy} className="mt-1 h-10 w-full">
         {busy ? 'Unlocking…' : 'Unlock vault'}
       </Button>
 
-      <button
-        type="button"
-        onClick={enterRecovery}
-        className="no-drag mx-auto text-xs transition-opacity hover:opacity-70"
-        style={{ color: 'var(--color-fg-muted)' }}
-      >
-        Forgot your master password?
-      </button>
-
-      <p className="text-center text-xs" style={{ color: 'var(--color-fg-muted)' }}>
-        New to Cloak?{' '}
-        <button type="button" onClick={onSwitch} className="no-drag font-medium" style={{ color: 'var(--color-brand-500)' }}>
+      <p className="auth-alt">
+        New to Cloak?
+        <button type="button" onClick={onSwitch} className="auth-link no-drag">
           Create an account
         </button>
       </p>

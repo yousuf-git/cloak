@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Eye, EyeOff, Copy, Check, Loader2 } from 'lucide-react';
+import { motion, useReducedMotion } from 'framer-motion';
+import { Copy, Check, Loader2 } from 'lucide-react';
 
 const SCRAMBLE_GLYPHS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
 /** Frames the whole transition spans, so long blobs animate as fast as short ones. */
@@ -172,22 +173,24 @@ export function SecretField({ value, reveal, cipher, maskLength = 20 }: SecretFi
   };
 
   const copy = async () => {
-    const result = await resolve();
-    if (result === null) return;
-    try {
-      await navigator.clipboard.writeText(result);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1200);
-    } catch {
-      /* clipboard unavailable */
-    }
+    // Start decrypting but do NOT await before touching the clipboard: the
+    // engine only honours a write while the click's user activation is still
+    // live, and a Tauri round-trip outruns it. That is why the first click used
+    // to fail silently and the second — served from the cached plaintext —
+    // worked. Handing the pending value to ClipboardItem keeps the write inside
+    // the gesture; the awaited paths below are fallbacks for engines without it.
+    const pending = resolve();
+    const ok = await writeClipboard(pending);
+    if (!ok) return;
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1200);
   };
 
   return (
     <div className="flex items-center gap-2">
       <code
         data-selectable="true"
-        title={!revealed && cipher ? 'Encrypted — click reveal to decrypt' : undefined}
+        title={!revealed && cipher ? 'Encrypted — click the lock to decrypt' : undefined}
         className="min-w-0 flex-1 truncate rounded-md px-2.5 py-1.5 font-mono text-xs"
         style={{
           backgroundColor: 'var(--color-surface-2)',
@@ -206,14 +209,12 @@ export function SecretField({ value, reveal, cipher, maskLength = 20 }: SecretFi
               ? plain
               : maskedPreview(cipher, maskLength)}
       </code>
-      <IconButton label={revealed ? 'Hide' : 'Reveal'} onClick={toggleReveal} disabled={busy || animating}>
-        {busy ? (
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-        ) : revealed ? (
-          <EyeOff className="h-3.5 w-3.5" />
-        ) : (
-          <Eye className="h-3.5 w-3.5" />
-        )}
+      <IconButton
+        label={revealed ? 'Encrypt' : 'Decrypt'}
+        onClick={toggleReveal}
+        disabled={busy || animating}
+      >
+        {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <LockKey unlocked={revealed} />}
       </IconButton>
       <IconButton label="Copy" onClick={copy} disabled={busy}>
         {copied ? (
@@ -223,6 +224,119 @@ export function SecretField({ value, reveal, cipher, maskLength = 20 }: SecretFi
         )}
       </IconButton>
     </div>
+  );
+}
+
+/**
+ * Copy a value that is still being decrypted, without losing the click's user
+ * activation. Tries the promise-valued ClipboardItem first (the write is queued
+ * synchronously inside the gesture), then a plain awaited write, then the
+ * legacy execCommand path for engines that refuse both.
+ */
+async function writeClipboard(pending: Promise<string | null>): Promise<boolean> {
+  if (typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
+    try {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          'text/plain': pending.then((v) => {
+            if (v === null) throw new Error('nothing to copy');
+            return new Blob([v], { type: 'text/plain' });
+          }),
+        }),
+      ]);
+      return true;
+    } catch {
+      // Fall through — either the engine rejected the promise form, or the
+      // decrypt itself failed (in which case the paths below bail too).
+    }
+  }
+
+  const value = await pending.catch(() => null);
+  if (value === null) return false;
+
+  try {
+    await navigator.clipboard.writeText(value);
+    return true;
+  } catch {
+    return legacyCopy(value);
+  }
+}
+
+/** Last resort: a throwaway textarea plus execCommand, which older WebKit allows. */
+function legacyCopy(value: string): boolean {
+  try {
+    const area = document.createElement('textarea');
+    area.value = value;
+    area.setAttribute('readonly', '');
+    area.style.position = 'fixed';
+    area.style.opacity = '0';
+    document.body.appendChild(area);
+    area.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(area);
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Reveal control: a padlock that a key unlocks. Closed means the value is still
+ * ciphertext; the key arriving and the shackle springing open is the decrypt.
+ * Locking runs the same beats backwards — shackle shuts, then the key withdraws.
+ */
+function LockKey({ unlocked }: { unlocked: boolean }) {
+  const reduced = useReducedMotion();
+
+  // The two parts are deliberately out of phase: unlocking, the key lands
+  // before the shackle gives; locking, the shackle shuts before the key leaves.
+  const shackle = reduced
+    ? { duration: 0 }
+    : { duration: 0.22, ease: 'easeOut' as const, delay: unlocked ? 0.24 : 0 };
+  const key = reduced
+    ? { duration: 0 }
+    : { duration: 0.26, ease: 'easeOut' as const, delay: unlocked ? 0 : 0.2 };
+
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.9}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {/*
+        Two drawn shapes cross-faded, rather than one shape rotated: a CSS
+        transform on an SVG child depends on transform-box/transform-origin
+        support and was not taking effect in the app's webview. Both paths share
+        a start point, so swapping them reads as the free end swinging up.
+      */}
+      <motion.path
+        d="M6.5 12V8.5a3.5 3.5 0 0 1 7 0V12"
+        animate={{ opacity: unlocked ? 0 : 1 }}
+        transition={shackle}
+      />
+      <motion.path
+        d="M6.5 12V8.5a3.5 3.5 0 0 1 6.6-1.4"
+        animate={{ opacity: unlocked ? 1 : 0 }}
+        transition={shackle}
+      />
+
+      <rect x="4" y="12" width="10" height="9" rx="2" />
+      <circle cx="9" cy="16.5" r="1.15" />
+
+      <motion.g
+        animate={unlocked ? { x: 0, opacity: 1 } : { x: 6, opacity: 0 }}
+        transition={key}
+      >
+        <circle cx="20.2" cy="16.5" r="2.1" />
+        <path d="M18.1 16.5H14.4" />
+        <path d="M15.9 16.5v2" />
+      </motion.g>
+    </svg>
   );
 }
 

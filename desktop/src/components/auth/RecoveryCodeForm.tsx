@@ -23,8 +23,8 @@ export function RecoveryCodeForm() {
   return (
     <form onSubmit={handleSubmit((v) => verifyRecoveryCode(v.code))} className="flex flex-col gap-5">
       <div className="flex justify-center">
-        <span className="rounded-2xl p-3" style={{ backgroundColor: 'var(--color-surface-2)' }}>
-          <ShieldCheck className="h-6 w-6" style={{ color: 'var(--color-brand-500)' }} />
+        <span className="auth-icon rounded-xl p-3">
+          <ShieldCheck className="h-6 w-6" style={{ color: 'var(--color-accent)' }} />
         </span>
       </div>
 

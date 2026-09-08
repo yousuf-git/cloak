@@ -9,8 +9,8 @@ export function FormError({ message }: { message: string | null }) {
       animate={{ opacity: 1, height: 'auto' }}
       className="flex items-start gap-2 rounded-lg px-3 py-2 text-xs"
       style={{
-        backgroundColor: 'color-mix(in srgb, #dc2626 12%, transparent)',
-        color: '#dc2626',
+        backgroundColor: 'color-mix(in srgb, var(--color-danger) 12%, transparent)',
+        color: 'var(--color-danger)',
       }}
       role="alert"
     >

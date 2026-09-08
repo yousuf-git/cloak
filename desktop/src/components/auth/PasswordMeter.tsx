@@ -16,7 +16,13 @@ function scorePassword(pw: string): Strength {
   score = Math.min(4, score);
 
   const labels = ['Too weak', 'Weak', 'Fair', 'Good', 'Strong'];
-  const colors = ['#dc2626', '#dc2626', '#d97706', '#16a34a', '#16a34a'];
+  const colors = [
+    'var(--color-danger)',
+    'var(--color-danger)',
+    'var(--color-warning)',
+    'var(--color-success)',
+    'var(--color-success)',
+  ];
   return { score, label: labels[score]!, color: colors[score]! };
 }
 
