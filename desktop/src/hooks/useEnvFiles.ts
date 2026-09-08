@@ -3,7 +3,14 @@ import { vaultApi, type EnvFileDto, type EnvTag } from '@/lib/api';
 import { crypto } from '@/lib/tauri-crypto';
 import { toBase64 } from '@/lib/base64';
 import { useAppMode } from '@/stores/app-mode';
+import { useOrg } from '@/hooks/useOrg';
 import { useSandboxData } from '@/stores/sandbox-data';
+
+/** Env-file crypto is always org-scoped; a missing org is a bug, not a state. */
+function requireOrg(orgId: string | null): string {
+  if (!orgId) throw new Error('No organization selected');
+  return orgId;
+}
 
 export interface DecryptResult {
   plaintext: string;
@@ -12,13 +19,14 @@ export interface DecryptResult {
 
 export function useEnvFiles(projectId?: string) {
   const sandbox = useAppMode((s) => s.sandbox);
+  const { orgId } = useOrg();
   const qc = useQueryClient();
   const sb = useSandboxData();
 
   const query = useQuery({
-    queryKey: ['env-files', projectId ?? 'all'],
+    queryKey: ['env-files', orgId, projectId ?? 'all'],
     queryFn: () => vaultApi.listEnvFiles(projectId),
-    enabled: !sandbox,
+    enabled: !sandbox && Boolean(orgId),
   });
   const invalidate = () => qc.invalidateQueries({ queryKey: ['env-files'] });
 
@@ -61,7 +69,7 @@ export function useEnvFiles(projectId?: string) {
     isLoading: query.isLoading,
 
     importPlain: async (pid: string, label: string, tag: EnvTag, plaintext: string) => {
-      const r = await crypto.envEncryptNew(plaintext);
+      const r = await crypto.envEncryptNew(requireOrg(orgId), plaintext);
       await vaultApi.createEnvFile({
         project_id: pid,
         label,
@@ -80,7 +88,9 @@ export function useEnvFiles(projectId?: string) {
       content: string,
       privateKeyHex?: string,
     ) => {
-      const wrapped = privateKeyHex ? await crypto.envWrapKey(privateKeyHex) : null;
+      const wrapped = privateKeyHex
+        ? await crypto.envWrapKey(requireOrg(orgId), privateKeyHex)
+        : null;
       const variableCount = await crypto.envCountVariables(content);
       await vaultApi.createEnvFile({
         project_id: pid,
@@ -100,7 +110,7 @@ export function useEnvFiles(projectId?: string) {
         throw new Error('No decryption key stored for this file.');
       }
       const raw = (await vaultApi.getEnvRaw(file._id)).content;
-      const r = await crypto.envDecrypt(raw, file.encrypted_dotenvx_key);
+      const r = await crypto.envDecrypt(requireOrg(orgId), raw, file.encrypted_dotenvx_key);
       return { plaintext: r.plaintext_env, publicKeyHex: r.public_key_hex };
     },
 

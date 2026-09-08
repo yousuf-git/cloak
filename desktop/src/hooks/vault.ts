@@ -8,21 +8,23 @@ import {
   type ProjectDto,
 } from '@/lib/api';
 import { useAppMode } from '@/stores/app-mode';
+import { useOrg } from '@/hooks/useOrg';
 import { useSandboxData } from '@/stores/sandbox-data';
 
 // ---------------- Credentials ----------------
 export function useCreds() {
   const sandbox = useAppMode((s) => s.sandbox);
+  const { orgId } = useOrg();
   const qc = useQueryClient();
   const sb = useSandboxData();
 
   const query = useQuery({
-    queryKey: ['creds'],
+    queryKey: ['creds', orgId],
     queryFn: vaultApi.listCreds,
-    enabled: !sandbox,
+    enabled: !sandbox && Boolean(orgId),
   });
 
-  const invalidate = () => qc.invalidateQueries({ queryKey: ['creds'] });
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['creds', orgId] });
 
   if (sandbox) {
     return {
@@ -55,15 +57,16 @@ export function useCreds() {
 // ---------------- API Keys ----------------
 export function useApiKeys() {
   const sandbox = useAppMode((s) => s.sandbox);
+  const { orgId } = useOrg();
   const qc = useQueryClient();
   const sb = useSandboxData();
 
   const query = useQuery({
-    queryKey: ['api-keys'],
+    queryKey: ['api-keys', orgId],
     queryFn: vaultApi.listApiKeys,
-    enabled: !sandbox,
+    enabled: !sandbox && Boolean(orgId),
   });
-  const invalidate = () => qc.invalidateQueries({ queryKey: ['api-keys'] });
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['api-keys', orgId] });
 
   if (sandbox) {
     return {
@@ -96,15 +99,16 @@ export function useApiKeys() {
 // ---------------- Access Keys ----------------
 export function useAccessKeys() {
   const sandbox = useAppMode((s) => s.sandbox);
+  const { orgId } = useOrg();
   const qc = useQueryClient();
   const sb = useSandboxData();
 
   const query = useQuery({
-    queryKey: ['access-keys'],
+    queryKey: ['access-keys', orgId],
     queryFn: vaultApi.listAccessKeys,
-    enabled: !sandbox,
+    enabled: !sandbox && Boolean(orgId),
   });
-  const invalidate = () => qc.invalidateQueries({ queryKey: ['access-keys'] });
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['access-keys', orgId] });
 
   if (sandbox) {
     return {
@@ -137,15 +141,16 @@ export function useAccessKeys() {
 // ---------------- SSH Keys ----------------
 export function useSshKeys() {
   const sandbox = useAppMode((s) => s.sandbox);
+  const { orgId } = useOrg();
   const qc = useQueryClient();
   const sb = useSandboxData();
 
   const query = useQuery({
-    queryKey: ['ssh-keys'],
+    queryKey: ['ssh-keys', orgId],
     queryFn: vaultApi.listSshKeys,
-    enabled: !sandbox,
+    enabled: !sandbox && Boolean(orgId),
   });
-  const invalidate = () => qc.invalidateQueries({ queryKey: ['ssh-keys'] });
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['ssh-keys', orgId] });
 
   if (sandbox) {
     return {
@@ -179,15 +184,16 @@ export function useSshKeys() {
 // ---------------- Platforms (backup codes) ----------------
 export function usePlatforms() {
   const sandbox = useAppMode((s) => s.sandbox);
+  const { orgId } = useOrg();
   const qc = useQueryClient();
   const sb = useSandboxData();
 
   const query = useQuery({
-    queryKey: ['platforms'],
+    queryKey: ['platforms', orgId],
     queryFn: vaultApi.listPlatforms,
-    enabled: !sandbox,
+    enabled: !sandbox && Boolean(orgId),
   });
-  const invalidate = () => qc.invalidateQueries({ queryKey: ['platforms'] });
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['platforms', orgId] });
 
   if (sandbox) {
     return {
@@ -231,15 +237,16 @@ export function usePlatforms() {
 // ---------------- Projects ----------------
 export function useProjects() {
   const sandbox = useAppMode((s) => s.sandbox);
+  const { orgId } = useOrg();
   const qc = useQueryClient();
   const sb = useSandboxData();
 
   const query = useQuery({
-    queryKey: ['projects'],
+    queryKey: ['projects', orgId],
     queryFn: vaultApi.listProjects,
-    enabled: !sandbox,
+    enabled: !sandbox && Boolean(orgId),
   });
-  const invalidate = () => qc.invalidateQueries({ queryKey: ['projects'] });
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['projects', orgId] });
 
   if (sandbox) {
     return {

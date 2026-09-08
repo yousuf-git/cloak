@@ -22,3 +22,52 @@ export function timeAgo(iso: string): string {
   if (mo < 12) return `${mo}mo ago`;
   return `${Math.floor(day / 365)}y ago`;
 }
+
+/**
+ * Absolute timestamp. Rendered in UTC so that teammates in different timezones
+ * comparing the same record read the same string — but the zone is not labelled,
+ * because the app never asks anyone to reason about offsets.
+ *
+ * Composed from two locales on purpose: en-GB gives day-first dates but
+ * lowercase "pm", en-US gives uppercase "PM" but month-first dates.
+ */
+export function formatUtc(iso?: string | null): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  const date = d.toLocaleDateString('en-GB', {
+    timeZone: 'UTC',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+  const time = d.toLocaleTimeString('en-US', {
+    timeZone: 'UTC',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  });
+  return `${date}, ${time}`;
+}
+
+/** Date-only variant of {@link formatUtc}, for compact list rows. */
+export function formatUtcDate(iso?: string | null): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleDateString('en-GB', {
+    timeZone: 'UTC',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+/**
+ * The name people are greeted by: the first whitespace-separated word of a full
+ * name, so a header stays one short line no matter how long the full name is.
+ */
+export function firstName(name?: string | null): string | null {
+  const first = name?.trim().split(/\s+/)[0];
+  return first || null;
+}

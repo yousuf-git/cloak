@@ -9,9 +9,11 @@ interface ModalProps {
   description?: string;
   children: ReactNode;
   footer?: ReactNode;
+  /** 'lg' for content that needs the width, such as a multi-column table. */
+  size?: 'md' | 'lg';
 }
 
-export function Modal({ open, onClose, title, description, children, footer }: ModalProps) {
+export function Modal({ open, onClose, title, description, children, footer, size = 'md' }: ModalProps) {
   return (
     <AnimatePresence>
       {open && (
@@ -30,7 +32,9 @@ export function Modal({ open, onClose, title, description, children, footer }: M
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.97, y: 6 }}
             transition={{ duration: 0.18, ease: 'easeOut' }}
-            className="relative z-10 w-full max-w-md overflow-hidden rounded-2xl border shadow-2xl"
+            className={`relative z-10 w-full overflow-hidden rounded-2xl border shadow-2xl ${
+              size === 'lg' ? 'max-w-3xl' : 'max-w-md'
+            }`}
             style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
           >
             <div className="flex items-start justify-between gap-4 p-5 pb-3">
