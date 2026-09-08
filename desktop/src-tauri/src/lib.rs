@@ -5,12 +5,15 @@ mod session;
 mod sidecar;
 
 use commands::{
-  app_version, crypto_decrypt_env_value, crypto_decrypt_field, crypto_derive_auth_hash,
-  crypto_encrypt_env_value, crypto_encrypt_field, crypto_env_count_variables, crypto_env_decrypt,
-  crypto_env_encrypt_existing, crypto_env_encrypt_new, crypto_env_wrap_key,
-  crypto_generate_env_keypair, crypto_prepare_signup, crypto_recovery_reset, crypto_reveal_all_env,
-  crypto_session_clear, crypto_session_status, crypto_unlock_session, read_text_file,
-  remember_clear, remember_enable, remember_status, remember_try_restore, write_text_file,
+  app_version, crypto_bootstrap_org, crypto_create_identity, crypto_decrypt_env_value,
+  crypto_decrypt_field, crypto_derive_auth_hash, crypto_encrypt_env_value, crypto_encrypt_field,
+  crypto_env_count_variables, crypto_env_decrypt, crypto_env_encrypt_existing,
+  crypto_env_encrypt_new, crypto_env_wrap_key, crypto_generate_env_keypair, crypto_identity_status,
+  crypto_load_identity, crypto_load_org, crypto_org_recovery_unlock, crypto_org_status,
+  crypto_prepare_signup, crypto_public_key_fingerprint, crypto_recovery_reset,
+  crypto_reveal_all_env, crypto_seal_org_dek_for, crypto_session_clear, crypto_session_status,
+  crypto_unlock_session, read_text_file, remember_clear, remember_enable, remember_status,
+  remember_try_restore, write_text_file,
 };
 use session::CryptoSession;
 use sidecar::ApiProcess;
@@ -46,6 +49,15 @@ pub fn run() {
       crypto_derive_auth_hash,
       crypto_recovery_reset,
       crypto_unlock_session,
+      crypto_load_identity,
+      crypto_create_identity,
+      crypto_load_org,
+      crypto_bootstrap_org,
+      crypto_seal_org_dek_for,
+      crypto_org_recovery_unlock,
+      crypto_public_key_fingerprint,
+      crypto_org_status,
+      crypto_identity_status,
       crypto_encrypt_field,
       crypto_decrypt_field,
       crypto_generate_env_keypair,

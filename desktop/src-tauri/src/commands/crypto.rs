@@ -1,8 +1,13 @@
+use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
 use serde::Serialize;
 use tauri::State;
+use zeroize::Zeroizing;
 
 use crate::crypto::dek::{
   decrypt_field, encrypt_field, generate_dek, unwrap_dek, wrap_dek,
+};
+use crate::crypto::identity::{
+  fingerprint, generate_identity_keypair, open_sealed, public_key_b64, seal_to_public_key,
 };
 use crate::crypto::dotenvx_compat::{
   count_variables, decrypt_env_file, decrypt_env_value, encrypt_env_file, encrypt_env_value,
@@ -23,6 +28,23 @@ pub struct SignupCryptoPayload {
   pub recovery_wrapped_dek_b64: String,
   /// One-time recovery key — shown to the user once, never persisted anywhere.
   pub recovery_key: String,
+  /// Identity keypair used to receive Org DEKs. The public half is served to
+  /// other members; the secret half is wrapped by the personal DEK, so it
+  /// survives password changes and rides the existing recovery envelope.
+  pub identity_public_key: String,
+  pub wrapped_identity_sk_b64: String,
+  /// Bootstrap material for the account's default organization.
+  pub org: OrgBootstrapPayload,
+}
+
+#[derive(Serialize)]
+pub struct OrgBootstrapPayload {
+  /// Org DEK sealed to the creator's own identity public key.
+  pub wrapped_org_dek_b64: String,
+  pub org_recovery_salt_b64: String,
+  pub org_recovery_wrapped_dek_b64: String,
+  /// One-time org recovery key — shown once, never persisted anywhere.
+  pub org_recovery_key: String,
 }
 
 #[derive(Serialize)]
@@ -31,6 +53,12 @@ pub struct RecoveryResetPayload {
   pub auth_hash_b64: String,
   pub wrapped_dek_b64: String,
   pub recovery_wrapped_dek_b64: String,
+}
+
+#[derive(Serialize)]
+pub struct IdentityPayload {
+  pub identity_public_key: String,
+  pub wrapped_identity_sk_b64: String,
 }
 
 #[derive(Serialize)]
@@ -62,12 +90,42 @@ pub fn crypto_prepare_signup(
   let recovery_wk = derive_recovery_wrapping_key(&recovery_key, &salt).map_err(|e| e.to_string())?;
   let recovery_wrapped = wrap_dek(&recovery_wk, &dek).map_err(|e| e.to_string())?;
 
+  let identity = generate_identity_keypair();
+  let wrapped_identity_sk =
+    encrypt_field(&dek, &B64.encode(*identity.secret_key)).map_err(|e| e.to_string())?;
+  let org = bootstrap_org_material(&identity.public_key_b64)?;
+
   Ok(SignupCryptoPayload {
     crypto_salt_b64: salt,
     auth_hash_b64: auth_hash,
     wrapped_dek_b64: wrapped,
     recovery_wrapped_dek_b64: recovery_wrapped,
     recovery_key,
+    identity_public_key: identity.public_key_b64,
+    wrapped_identity_sk_b64: wrapped_identity_sk,
+    org,
+  })
+}
+
+/// Mint an Org DEK and its two envelopes: sealed to the creator's identity key
+/// (the everyday path) and wrapped under a one-time org recovery key (the
+/// break-glass path for an owner who has lost every member device).
+fn bootstrap_org_material(owner_public_key_b64: &str) -> Result<OrgBootstrapPayload, String> {
+  let org_dek = generate_dek();
+  let wrapped_org_dek =
+    seal_to_public_key(owner_public_key_b64, &*org_dek).map_err(|e| e.to_string())?;
+
+  let org_recovery_key = generate_recovery_key();
+  let org_recovery_salt = generate_crypto_salt_b64();
+  let org_recovery_wk = derive_recovery_wrapping_key(&org_recovery_key, &org_recovery_salt)
+    .map_err(|e| e.to_string())?;
+  let org_recovery_wrapped = wrap_dek(&org_recovery_wk, &org_dek).map_err(|e| e.to_string())?;
+
+  Ok(OrgBootstrapPayload {
+    wrapped_org_dek_b64: wrapped_org_dek,
+    org_recovery_salt_b64: org_recovery_salt,
+    org_recovery_wrapped_dek_b64: org_recovery_wrapped,
+    org_recovery_key,
   })
 }
 
@@ -142,24 +200,157 @@ pub fn crypto_unlock_session(
   })
 }
 
+/// Load the identity secret key into the session. Requires an unlocked vault:
+/// the key is wrapped by the personal DEK.
+#[tauri::command]
+pub fn crypto_load_identity(
+  session: State<'_, CryptoSession>,
+  wrapped_identity_sk_b64: String,
+) -> Result<String, String> {
+  let secret_b64 = session
+    .with_dek(|dek| decrypt_field(dek, &wrapped_identity_sk_b64))
+    .map_err(|e| e.to_string())?;
+  let secret = decode_secret_key(&secret_b64)?;
+  let public = public_key_b64(&secret);
+  session.set_identity_sk(secret);
+  Ok(public)
+}
+
+/// Generate an identity keypair for an account that predates them, wrapping the
+/// secret half under the personal DEK. The caller persists both halves.
+#[tauri::command]
+pub fn crypto_create_identity(
+  session: State<'_, CryptoSession>,
+) -> Result<IdentityPayload, String> {
+  let identity = generate_identity_keypair();
+  let wrapped = session
+    .with_dek(|dek| encrypt_field(dek, &B64.encode(*identity.secret_key)))
+    .map_err(|e| e.to_string())?;
+  session.set_identity_sk(identity.secret_key);
+  Ok(IdentityPayload {
+    identity_public_key: identity.public_key_b64,
+    wrapped_identity_sk_b64: wrapped,
+  })
+}
+
+/// Open a membership's sealed Org DEK with the identity key and hold it for the
+/// session, so vault items in that org can be encrypted and decrypted.
+#[tauri::command]
+pub fn crypto_load_org(
+  session: State<'_, CryptoSession>,
+  org_id: String,
+  wrapped_org_dek_b64: String,
+) -> Result<(), String> {
+  let opened = session
+    .with_identity_sk(|sk| open_sealed(sk, &wrapped_org_dek_b64))
+    .map_err(|e| e.to_string())?;
+  session.set_org_dek(&org_id, to_dek(&opened)?);
+  Ok(())
+}
+
+/// Mint a new organization's key material. Requires a loaded identity — the Org
+/// DEK is sealed to the creator's own public key.
+#[tauri::command]
+pub fn crypto_bootstrap_org(
+  session: State<'_, CryptoSession>,
+) -> Result<OrgBootstrapPayload, String> {
+  let public = session
+    .with_identity_sk(|sk| Ok(public_key_b64(sk)))
+    .map_err(|e| e.to_string())?;
+  bootstrap_org_material(&public)
+}
+
+/// Seal an org's DEK to a joining member's public key. This is the grant step:
+/// neither the server nor the invitee can perform it, so an existing member
+/// with the key has to. Verify `fingerprint` out of band first — a substituted
+/// public key here would hand the org's secrets to whoever holds its private half.
+#[tauri::command]
+pub fn crypto_seal_org_dek_for(
+  session: State<'_, CryptoSession>,
+  org_id: String,
+  recipient_public_key_b64: String,
+) -> Result<String, String> {
+  session
+    .with_org_dek(&org_id, |dek| {
+      seal_to_public_key(&recipient_public_key_b64, dek)
+    })
+    .map_err(|e| e.to_string())
+}
+
+/// Break-glass: recover an org with its one-time recovery key, then re-seal the
+/// Org DEK to the caller's identity so normal access resumes.
+#[tauri::command]
+pub fn crypto_org_recovery_unlock(
+  session: State<'_, CryptoSession>,
+  org_id: String,
+  org_recovery_key: String,
+  org_recovery_salt_b64: String,
+  org_recovery_wrapped_dek_b64: String,
+) -> Result<String, String> {
+  let wrapping_key = derive_recovery_wrapping_key(&org_recovery_key, &org_recovery_salt_b64)
+    .map_err(|e| e.to_string())?;
+  let org_dek = unwrap_dek(&wrapping_key, &org_recovery_wrapped_dek_b64).map_err(|_| {
+    "That recovery key doesn't match this organization. Check it and try again.".to_string()
+  })?;
+
+  let public = session
+    .with_identity_sk(|sk| Ok(public_key_b64(sk)))
+    .map_err(|e| e.to_string())?;
+  let resealed = seal_to_public_key(&public, &*org_dek).map_err(|e| e.to_string())?;
+
+  session.set_org_dek(&org_id, org_dek);
+  Ok(resealed)
+}
+
+#[tauri::command]
+pub fn crypto_public_key_fingerprint(public_key_b64: String) -> Result<String, String> {
+  fingerprint(&public_key_b64).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn crypto_org_status(session: State<'_, CryptoSession>, org_id: String) -> bool {
+  session.with_org_dek(&org_id, |_| Ok(())).is_ok()
+}
+
+#[tauri::command]
+pub fn crypto_identity_status(session: State<'_, CryptoSession>) -> bool {
+  session.has_identity()
+}
+
 #[tauri::command]
 pub fn crypto_encrypt_field(
   session: State<'_, CryptoSession>,
+  org_id: String,
   plaintext: String,
 ) -> Result<String, String> {
   session
-    .with_dek(|dek| encrypt_field(dek, &plaintext))
+    .with_org_dek(&org_id, |dek| encrypt_field(dek, &plaintext))
     .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn crypto_decrypt_field(
   session: State<'_, CryptoSession>,
+  org_id: String,
   ciphertext_b64: String,
 ) -> Result<String, String> {
   session
-    .with_dek(|dek| decrypt_field(dek, &ciphertext_b64))
+    .with_org_dek(&org_id, |dek| decrypt_field(dek, &ciphertext_b64))
     .map_err(|e| e.to_string())
+}
+
+fn decode_secret_key(secret_b64: &str) -> Result<Zeroizing<[u8; 32]>, String> {
+  let bytes = B64.decode(secret_b64).map_err(|e| e.to_string())?;
+  to_dek(&bytes)
+}
+
+fn to_dek(bytes: &[u8]) -> Result<Zeroizing<[u8; 32]>, String> {
+  if bytes.len() != 32 {
+    return Err("key must be 32 bytes".to_string());
+  }
+  let mut key = Zeroizing::new([0u8; 32]);
+  key.copy_from_slice(bytes);
+  Ok(key)
 }
 
 #[tauri::command]
@@ -205,13 +396,14 @@ pub struct EnvEncryptResult {
 #[tauri::command]
 pub fn crypto_env_encrypt_new(
   session: State<'_, CryptoSession>,
+  org_id: String,
   plaintext_env: String,
 ) -> Result<EnvEncryptNewResult, String> {
   let kp = generate_env_keypair();
   let encrypted_env =
     encrypt_env_file(&plaintext_env, &kp.public_key_hex).map_err(|e| e.to_string())?;
   let wrapped_key_b64 = session
-    .with_dek(|dek| encrypt_field(dek, &kp.private_key_hex))
+    .with_org_dek(&org_id, |dek| encrypt_field(dek, &kp.private_key_hex))
     .map_err(|e| e.to_string())?;
   let variable_count = count_variables(&encrypted_env);
 
@@ -227,11 +419,12 @@ pub fn crypto_env_encrypt_new(
 #[tauri::command]
 pub fn crypto_env_decrypt(
   session: State<'_, CryptoSession>,
+  org_id: String,
   encrypted_env: String,
   wrapped_key_b64: String,
 ) -> Result<EnvDecryptResult, String> {
   let private_key = session
-    .with_dek(|dek| decrypt_field(dek, &wrapped_key_b64))
+    .with_org_dek(&org_id, |dek| decrypt_field(dek, &wrapped_key_b64))
     .map_err(|e| e.to_string())?;
   let plaintext_env = decrypt_env_file(&encrypted_env, &private_key).map_err(|e| e.to_string())?;
 
@@ -262,10 +455,11 @@ pub fn crypto_env_encrypt_existing(
 #[tauri::command]
 pub fn crypto_env_wrap_key(
   session: State<'_, CryptoSession>,
+  org_id: String,
   private_key_hex: String,
 ) -> Result<String, String> {
   session
-    .with_dek(|dek| encrypt_field(dek, &private_key_hex))
+    .with_org_dek(&org_id, |dek| encrypt_field(dek, &private_key_hex))
     .map_err(|e| e.to_string())
 }
 

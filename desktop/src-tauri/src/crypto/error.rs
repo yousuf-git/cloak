@@ -22,6 +22,12 @@ pub enum CryptoError {
 
   #[error("session not unlocked")]
   SessionLocked,
+
+  #[error("identity key not loaded")]
+  IdentityLocked,
+
+  #[error("organization {0} is locked")]
+  OrgLocked(String),
 }
 
 pub type CryptoResult<T> = Result<T, CryptoError>;
