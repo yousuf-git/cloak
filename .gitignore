@@ -30,7 +30,13 @@ Thumbs.db
 .idea/
 .vscode/*
 !.vscode/extensions.json
+
+# Agent / editor tooling — never belongs in the repository, at any depth.
+# Reticle session journals in particular hold request/response bodies and page
+# text captured from the app under test.
 .claude
+.cursor
+.reticle
 
 # Test / coverage
 coverage/
