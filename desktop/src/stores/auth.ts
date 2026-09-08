@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { crypto } from '@/lib/tauri-crypto';
+import { useOrgs } from '@/stores/org';
 import {
   api,
   ApiError,
@@ -36,18 +37,28 @@ interface RecoveryContext {
 interface AuthState {
   status: AuthStatus;
   email: string | null;
+  /** Display name, kept alongside the email so headers can greet by first name. */
+  name: string | null;
   error: string | null;
+  /** Informational message — a state to explain, not a failure. */
+  notice: string | null;
   busy: boolean;
+  /** True when the user arrived at verification by returning, not by signing up. */
+  resumedVerification: boolean;
   /** Transient secrets held only for multi-step flows (verification / 2FA). */
   pending: PendingCreds | null;
-  /** One-time recovery key, shown once right after signup, then wiped. */
+  /** One-time recovery keys, shown once right after signup, then wiped. */
   recoveryKey: string | null;
+  orgRecoveryKey: string | null;
   recoveryCtx: RecoveryContext | null;
 
   boot: () => Promise<void>;
-  signup: (email: string, password: string, remember: boolean) => Promise<void>;
+  signup: (name: string, email: string, password: string, remember: boolean) => Promise<void>;
+  setName: (name: string) => Promise<void>;
   acknowledgeRecoveryKey: () => void;
   verifyEmail: (code: string) => Promise<void>;
+  /** Ask for a fresh verification code; resolves false if it could not be sent. */
+  resendVerification: () => Promise<boolean>;
   login: (email: string, password: string, remember: boolean) => Promise<void>;
   submitTwoFactor: (otp: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -63,6 +74,19 @@ interface AuthState {
   clearError: () => void;
 }
 
+/** Name for the organization every account is given at signup. Renameable later. */
+const DEFAULT_ORG_NAME = 'Personal Space';
+
+/** Pull the display name in behind an unlock; a failure here must not block it. */
+async function hydrateProfile(set: (partial: Partial<AuthState>) => void): Promise<void> {
+  try {
+    const profile = await api.me();
+    set({ name: profile.name ?? null });
+  } catch {
+    // Profile is cosmetic — the vault is already open.
+  }
+}
+
 function toMessage(err: unknown): string {
   if (err instanceof ApiError) return err.message;
   if (err instanceof Error) return err.message;
@@ -72,10 +96,14 @@ function toMessage(err: unknown): string {
 export const useAuth = create<AuthState>((set, get) => ({
   status: 'booting',
   email: null,
+  name: null,
   error: null,
+  notice: null,
   busy: false,
+  resumedVerification: false,
   pending: null,
   recoveryKey: null,
+  orgRecoveryKey: null,
   recoveryCtx: null,
 
   boot: async () => {
@@ -86,6 +114,7 @@ export const useAuth = create<AuthState>((set, get) => ({
         const ok = await tryRefresh();
         if (ok) {
           set({ status: 'unlocked', email: restored.email });
+          await Promise.all([useOrgs.getState().hydrate(), hydrateProfile(set)]);
           return;
         }
         await crypto.rememberClear().catch(() => {});
@@ -98,30 +127,73 @@ export const useAuth = create<AuthState>((set, get) => ({
     set({ status: 'locked' });
   },
 
-  signup: async (email, password, remember) => {
+  signup: async (name, email, password, remember) => {
     set({ busy: true, error: null });
     try {
       const payload = await crypto.prepareSignup(password);
       await api.signup({
         email,
+        name,
         authHash: payload.auth_hash_b64,
         cryptoSalt: payload.crypto_salt_b64,
         wrappedDEK: payload.wrapped_dek_b64,
         recoveryWrappedDEK: payload.recovery_wrapped_dek_b64,
+        identityPublicKey: payload.identity_public_key,
+        wrappedIdentitySk: payload.wrapped_identity_sk_b64,
+        // Every account starts inside an organization, so signup mints its key
+        // material in the same step.
+        defaultOrg: {
+          name: DEFAULT_ORG_NAME,
+          wrapped_org_dek: payload.org.wrapped_org_dek_b64,
+          org_recovery_salt: payload.org.org_recovery_salt_b64,
+          org_recovery_wrappedDEK: payload.org.org_recovery_wrapped_dek_b64,
+        },
       });
       set({
         status: 'show_recovery_key',
         email,
+        name,
         recoveryKey: payload.recovery_key,
+        orgRecoveryKey: payload.org.org_recovery_key,
         pending: { password, cryptoSalt: payload.crypto_salt_b64, remember },
         busy: false,
       });
     } catch (err) {
+      // The address is taken by an account that never finished verifying. Try
+      // the credentials they just typed against it: if they match, login routes
+      // them into verification; if not, login reports that plainly. Guessing
+      // either way would be worse than letting the real check answer.
+      if (err instanceof ApiError && err.code === 'EMAIL_NOT_VERIFIED') {
+        set({ busy: false, error: null });
+        await get().login(email, password, remember);
+        if (get().error) {
+          set({
+            error:
+              'That email already has an unverified account. Sign in with the password you first chose, to finish verifying it.',
+          });
+        }
+        return;
+      }
       set({ busy: false, error: toMessage(err) });
     }
   },
 
-  acknowledgeRecoveryKey: () => set({ status: 'awaiting_verification', recoveryKey: null }),
+  acknowledgeRecoveryKey: () =>
+    set({ status: 'awaiting_verification', recoveryKey: null, orgRecoveryKey: null }),
+
+  resendVerification: async () => {
+    const { email } = get();
+    if (!email) return false;
+    set({ error: null, notice: null });
+    try {
+      await api.resendVerification(email);
+      set({ notice: `A new code is on its way to ${email}.` });
+      return true;
+    } catch (err) {
+      set({ error: toMessage(err) });
+      return false;
+    }
+  },
 
   verifyEmail: async (code) => {
     const { email, pending } = get();
@@ -132,7 +204,7 @@ export const useAuth = create<AuthState>((set, get) => ({
     set({ busy: true, error: null });
     try {
       await api.verifyEmail(email, code);
-      set({ busy: false });
+      set({ busy: false, notice: null, resumedVerification: false });
       await get().login(email, pending.password, pending.remember);
     } catch (err) {
       set({ busy: false, error: toMessage(err) });
@@ -140,9 +212,11 @@ export const useAuth = create<AuthState>((set, get) => ({
   },
 
   login: async (email, password, remember) => {
-    set({ busy: true, error: null });
+    set({ busy: true, error: null, notice: null });
+    // Hoisted: the unverified branch below needs the salt to stash pending creds.
+    let crypto_salt = '';
     try {
-      const { crypto_salt } = await api.prelogin(email);
+      ({ crypto_salt } = await api.prelogin(email));
       const { auth_hash_b64 } = await crypto.deriveAuthHash(password, crypto_salt);
       const res = await api.login(email, auth_hash_b64);
 
@@ -162,7 +236,23 @@ export const useAuth = create<AuthState>((set, get) => ({
         await crypto.rememberEnable(res.refreshToken, email).catch(() => {});
       }
       set({ status: 'unlocked', email, pending: null, busy: false });
+      await Promise.all([useOrgs.getState().hydrate(), hydrateProfile(set)]);
     } catch (err) {
+      // The password was right; the address was simply never confirmed. The
+      // server has already sent a fresh code, so go straight to the code screen
+      // rather than reporting a failure the user cannot act on.
+      if (err instanceof ApiError && err.code === 'EMAIL_NOT_VERIFIED') {
+        set({
+          status: 'awaiting_verification',
+          email,
+          pending: { password, cryptoSalt: crypto_salt, remember },
+          resumedVerification: true,
+          error: null,
+          notice: 'Your account was created but never verified. We just sent a new code.',
+          busy: false,
+        });
+        return;
+      }
       set({ busy: false, error: toMessage(err) });
     }
   },
@@ -182,6 +272,7 @@ export const useAuth = create<AuthState>((set, get) => ({
         await crypto.rememberEnable(res.refreshToken, email).catch(() => {});
       }
       set({ status: 'unlocked', pending: null, busy: false });
+      await Promise.all([useOrgs.getState().hydrate(), hydrateProfile(set)]);
     } catch (err) {
       set({ busy: false, error: toMessage(err) });
     }
@@ -195,12 +286,30 @@ export const useAuth = create<AuthState>((set, get) => ({
       await crypto.sessionClear().catch(() => {});
       await crypto.rememberClear().catch(() => {});
       clearTokens();
-      set({ status: 'locked', email: null, pending: null, busy: false, error: null });
+      useOrgs.getState().reset();
+      set({
+        status: 'locked',
+        email: null,
+        name: null,
+        pending: null,
+        busy: false,
+        error: null,
+        notice: null,
+        resumedVerification: false,
+      });
     }
   },
 
   returnToLogin: () =>
-    set({ status: 'locked', error: null, pending: null, recoveryKey: null, recoveryCtx: null }),
+    set({
+      status: 'locked',
+      error: null,
+      notice: null,
+      resumedVerification: false,
+      pending: null,
+      recoveryKey: null,
+      recoveryCtx: null,
+    }),
 
   enterRecovery: () => set({ status: 'recovery_email', error: null }),
   cancelRecovery: () =>
@@ -265,11 +374,18 @@ export const useAuth = create<AuthState>((set, get) => ({
       if (remember) {
         await crypto.rememberEnable(res.refreshToken, email).catch(() => {});
       }
-      // Session was already established inside crypto.recoveryReset.
+      // Session was already established inside crypto.recoveryReset. The DEK is
+      // unchanged, so the identity envelope it wraps still opens.
       set({ status: 'unlocked', recoveryCtx: null, pending: null, busy: false });
+      await Promise.all([useOrgs.getState().hydrate(), hydrateProfile(set)]);
     } catch (err) {
       set({ busy: false, error: toMessage(err) });
     }
+  },
+
+  setName: async (name) => {
+    const profile = await api.updateMe(name.trim());
+    set({ name: profile.name ?? null });
   },
 
   clearError: () => set({ error: null }),
@@ -283,5 +399,6 @@ onAuthLostHandler(() => {
   // they submit their OTP.
   if (useAuth.getState().status !== 'unlocked') return;
   crypto.sessionClear().catch(() => {});
+  useOrgs.getState().reset();
   useAuth.setState({ status: 'locked', pending: null });
 });

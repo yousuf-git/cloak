@@ -2,6 +2,12 @@ import { z } from 'zod';
 
 const email = z.string().min(1, 'Email is required').email('Enter a valid email');
 
+const displayName = z
+  .string()
+  .trim()
+  .min(1, 'Name is required')
+  .max(80, 'Too long');
+
 // The master password is the sole key to the vault — enforce real strength.
 const masterPassword = z
   .string()
@@ -16,6 +22,7 @@ export const loginSchema = z.object({
 
 export const signupSchema = z
   .object({
+    name: displayName,
     email,
     password: masterPassword,
     confirm: z.string(),
