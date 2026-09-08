@@ -6,10 +6,9 @@ import * as tokenService from '../services/token.service.js';
 import { recordAudit } from '../services/audit.service.js';
 
 export const signup = asyncHandler(async (req: Request, res: Response) => {
-  const { email, authHash, cryptoSalt, wrappedDEK, recoveryWrappedDEK } = req.body;
-  await authService.signup({ email, authHash, cryptoSalt, wrappedDEK, recoveryWrappedDEK });
-  await recordAudit({ action: 'auth:signup', resource: 'User', req });
-  created(res, { email, verificationRequired: true });
+  const { orgId } = await authService.signup(req.body);
+  await recordAudit({ action: 'auth:signup', orgId, resource: 'User', req });
+  created(res, { email: req.body.email, verificationRequired: true, orgId });
 });
 
 export const prelogin = asyncHandler(async (req: Request, res: Response) => {
@@ -37,6 +36,7 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
     accessToken: outcome.tokens.accessToken,
     refreshToken: outcome.tokens.refreshToken,
     wrappedDEK: outcome.wrappedDEK,
+    wrappedIdentitySk: outcome.wrappedIdentitySk,
   });
 });
 
@@ -48,6 +48,7 @@ export const twoFactor = asyncHandler(async (req: Request, res: Response) => {
     accessToken: result.tokens.accessToken,
     refreshToken: result.tokens.refreshToken,
     wrappedDEK: result.wrappedDEK,
+    wrappedIdentitySk: result.wrappedIdentitySk,
   });
 });
 
@@ -98,12 +99,27 @@ export const recoveryReset = asyncHandler(async (req: Request, res: Response) =>
     accessToken: result.tokens.accessToken,
     refreshToken: result.tokens.refreshToken,
     wrappedDEK: result.wrappedDEK,
+    wrappedIdentitySk: result.wrappedIdentitySk,
   });
 });
 
 export const getMe = asyncHandler(async (req: Request, res: Response) => {
   if (!req.user) throw new UnauthorizedError();
   const profile = await authService.getProfile(req.user.sub);
+  ok(res, profile);
+});
+
+export const resendVerification = asyncHandler(async (req: Request, res: Response) => {
+  await authService.resendVerification(req.body.email);
+  // Always the same reply: whether the address is registered, or already
+  // verified, must not be observable here.
+  ok(res, { sent: true });
+});
+
+export const updateMe = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user) throw new UnauthorizedError();
+  const profile = await authService.updateProfile(req.user.sub, { name: req.body.name });
+  await recordAudit({ action: 'user:rename', userId: req.user.sub, resource: 'User', req });
   ok(res, profile);
 });
 

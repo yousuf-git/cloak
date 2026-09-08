@@ -25,5 +25,13 @@ export const authLimiter = rateLimit({
   skipSuccessfulRequests: true,
 });
 
+/**
+ * For endpoints that send mail to a caller-supplied address and answer
+ * identically whatever happens. Every request counts — `authLimiter` would be
+ * useless here, since its `skipSuccessfulRequests` sees a always-200 handler as
+ * always successful and would never throttle anything.
+ */
+export const emailDispatchLimiter = rateLimit({ ...base, max: config.RATE_LIMIT_AUTH_MAX });
+
 /** Limiter for file-upload (env-file) endpoints. */
 export const uploadLimiter = rateLimit({ ...base, max: config.RATE_LIMIT_UPLOAD_MAX });

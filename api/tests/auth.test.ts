@@ -16,19 +16,15 @@ vi.mock('../src/services/email.service.js', () => ({
   sendRecoveryEmail: vi.fn(async (_to: string, code: string) => {
     otpCodes.push(code);
   }),
+  sendInvitationEmail: vi.fn(async () => {}),
 }));
 
 const { createApp } = await import('../src/app.js');
+const { signupBody } = await import('./helpers.js');
 const app = createApp();
 
 const EMAIL = 'dev@example.com';
-const SIGNUP = {
-  email: EMAIL,
-  authHash: 'YXV0aC1oYXNoLWJhc2U2NA==',
-  cryptoSalt: 'c29tZS1zYWx0LTE2Ynl0ZXNfXw==',
-  wrappedDEK: 'd3JhcHBlZC1kZWstYmxvYg==',
-  recoveryWrappedDEK: 'cmVjb3Zlcnktd3JhcHBlZC1kZWs=',
-};
+const SIGNUP = signupBody(EMAIL);
 
 beforeAll(async () => {
   await mongoose.connect(process.env.MONGODB_URI!);
@@ -50,6 +46,15 @@ async function signup() {
   return request(app).post('/api/v1/auth/signup').send(SIGNUP).expect(201);
 }
 
+/** Signup plus the real OTP round-trip — login refuses unverified accounts. */
+async function signupAndVerify() {
+  await signup();
+  await request(app)
+    .post('/api/v1/auth/verify-email')
+    .send({ email: EMAIL, code: verifyCodes.at(-1) })
+    .expect(200);
+}
+
 describe('auth flow', () => {
   it('signs up and issues a verification code', async () => {
     const res = await signup();
@@ -57,8 +62,15 @@ describe('auth flow', () => {
     expect(verifyCodes).toHaveLength(1);
   });
 
-  it('rejects duplicate signup with 409', async () => {
+  it('flags a duplicate signup on an unverified account as unverified', async () => {
     await signup();
+    const res = await request(app).post('/api/v1/auth/signup').send(SIGNUP).expect(409);
+    // Distinct from CONFLICT so the client can offer to finish verifying.
+    expect(res.body.code).toBe('EMAIL_NOT_VERIFIED');
+  });
+
+  it('rejects duplicate signup on a verified account with 409 CONFLICT', async () => {
+    await signupAndVerify();
     const res = await request(app).post('/api/v1/auth/signup').send(SIGNUP).expect(409);
     expect(res.body.code).toBe('CONFLICT');
   });
@@ -78,7 +90,7 @@ describe('auth flow', () => {
   });
 
   it('logs in without 2FA and returns tokens + wrappedDEK', async () => {
-    await signup();
+    await signupAndVerify();
     const res = await request(app)
       .post('/api/v1/auth/login')
       .send({ email: EMAIL, authHash: SIGNUP.authHash })
@@ -98,7 +110,7 @@ describe('auth flow', () => {
   });
 
   it('rotates refresh tokens and invalidates the old one', async () => {
-    await signup();
+    await signupAndVerify();
     const login = await request(app)
       .post('/api/v1/auth/login')
       .send({ email: EMAIL, authHash: SIGNUP.authHash })
@@ -123,7 +135,7 @@ describe('auth flow', () => {
   });
 
   it('completes the 2FA challenge flow end-to-end', async () => {
-    await signup();
+    await signupAndVerify();
     // Log in, get access token, enable 2FA.
     const login = await request(app)
       .post('/api/v1/auth/login')
@@ -154,12 +166,75 @@ describe('auth flow', () => {
     expect(verified.body.data.wrappedDEK).toBe(SIGNUP.wrappedDEK);
   });
 
+  it('blocks login on an unverified account and sends a fresh code', async () => {
+    await signup();
+    expect(verifyCodes).toHaveLength(1);
+
+    const res = await request(app)
+      .post('/api/v1/auth/login')
+      .send({ email: EMAIL, authHash: SIGNUP.authHash })
+      .expect(403);
+    expect(res.body.code).toBe('EMAIL_NOT_VERIFIED');
+    // A returning user's original code has long expired, so login mints another.
+    expect(verifyCodes).toHaveLength(2);
+
+    // That newest code completes verification, and login then works.
+    await request(app)
+      .post('/api/v1/auth/verify-email')
+      .send({ email: EMAIL, code: verifyCodes.at(-1) })
+      .expect(200);
+    await request(app)
+      .post('/api/v1/auth/login')
+      .send({ email: EMAIL, authHash: SIGNUP.authHash })
+      .expect(200);
+  });
+
+  it('does not reveal verification state to a wrong password', async () => {
+    await signup();
+    const res = await request(app)
+      .post('/api/v1/auth/login')
+      .send({ email: EMAIL, authHash: 'd3Jvbmc=' })
+      .expect(401);
+    expect(res.body.code).toBe('UNAUTHORIZED');
+    // No code sent: the caller failed the password check.
+    expect(verifyCodes).toHaveLength(1);
+  });
+
+  it('resends a verification code without disclosing account state', async () => {
+    await signup();
+    verifyCodes.length = 0;
+
+    await request(app)
+      .post('/api/v1/auth/resend-verification')
+      .send({ email: EMAIL })
+      .expect(200);
+    expect(verifyCodes).toHaveLength(1);
+
+    // Unknown address and an already-verified one answer identically and send
+    // nothing, so neither existence nor verification state leaks.
+    await request(app)
+      .post('/api/v1/auth/resend-verification')
+      .send({ email: 'ghost@example.com' })
+      .expect(200);
+    expect(verifyCodes).toHaveLength(1);
+
+    await request(app)
+      .post('/api/v1/auth/verify-email')
+      .send({ email: EMAIL, code: verifyCodes.at(-1) })
+      .expect(200);
+    await request(app)
+      .post('/api/v1/auth/resend-verification')
+      .send({ email: EMAIL })
+      .expect(200);
+    expect(verifyCodes).toHaveLength(1);
+  });
+
   it('rejects /me/2fa without a token', async () => {
     await request(app).post('/api/v1/me/2fa').send({ enabled: true }).expect(401);
   });
 
   it('returns the profile from /me with a valid token', async () => {
-    await signup();
+    await signupAndVerify();
     const login = await request(app)
       .post('/api/v1/auth/login')
       .send({ email: EMAIL, authHash: SIGNUP.authHash })
@@ -171,12 +246,12 @@ describe('auth flow', () => {
     expect(me.body.data).toMatchObject({
       email: EMAIL,
       two_factor_enabled: false,
-      is_verified: false,
+      is_verified: true,
     });
   });
 
   it('recovers access via the recovery envelope and rotates credentials', async () => {
-    await signup();
+    await signupAndVerify();
 
     // Start + verify recovery (generic 200 on start).
     await request(app).post('/api/v1/auth/recovery/start').send({ email: EMAIL }).expect(200);

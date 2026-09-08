@@ -1,7 +1,9 @@
 import { Router } from 'express';
 import { validate } from '../middlewares/validate.js';
-import { authLimiter } from '../middlewares/rate-limit.js';
+import { authLimiter, emailDispatchLimiter } from '../middlewares/rate-limit.js';
 import { requireAuth } from '../middlewares/require-auth.js';
+import { identitySchema } from '../validators/org.validators.js';
+import * as org from '../controllers/org.controller.js';
 import {
   signupSchema,
   preloginSchema,
@@ -11,6 +13,8 @@ import {
   refreshSchema,
   logoutSchema,
   setTwoFactorSchema,
+  updateProfileSchema,
+  resendVerificationSchema,
   recoveryStartSchema,
   recoveryVerifySchema,
   recoveryResetSchema,
@@ -28,6 +32,13 @@ authRouter.post('/prelogin', validate({ body: preloginSchema }), auth.prelogin);
 authRouter.post('/login', authLimiter, validate({ body: loginSchema }), auth.login);
 authRouter.post('/2fa', authLimiter, validate({ body: twoFactorSchema }), auth.twoFactor);
 authRouter.post('/verify-email', authLimiter, validate({ body: verifyEmailSchema }), auth.verifyEmail);
+// Rate-limited hard: this one sends mail to an address the caller chose.
+authRouter.post(
+  '/resend-verification',
+  emailDispatchLimiter,
+  validate({ body: resendVerificationSchema }),
+  auth.resendVerification,
+);
 authRouter.post('/refresh', validate({ body: refreshSchema }), auth.refresh);
 authRouter.post('/logout', validate({ body: logoutSchema }), auth.logout);
 
@@ -39,4 +50,7 @@ authRouter.post('/recovery/reset', validate({ body: recoveryResetSchema }), auth
 export const meRouter = Router();
 meRouter.use(requireAuth);
 meRouter.get('/', auth.getMe);
+meRouter.patch('/', validate({ body: updateProfileSchema }), auth.updateMe);
 meRouter.post('/2fa', validate({ body: setTwoFactorSchema }), auth.setTwoFactor);
+// Publishing an identity public key is a prerequisite for joining any org.
+meRouter.post('/identity', validate({ body: identitySchema }), org.publishIdentity);

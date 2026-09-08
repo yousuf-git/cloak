@@ -50,6 +50,18 @@ export class ConflictError extends AppError {
   }
 }
 
+/**
+ * The account exists and the credentials are right, but the email was never
+ * confirmed. Carries its own code so the client can route into verification
+ * instead of showing a dead-end failure. Signup raises it as a 409 (the address
+ * is taken); login raises it as a 403 (the credentials were fine).
+ */
+export class EmailNotVerifiedError extends AppError {
+  constructor(message = 'Email address not verified', statusCode = 403) {
+    super(message, statusCode, 'EMAIL_NOT_VERIFIED');
+  }
+}
+
 export class RateLimitError extends AppError {
   constructor(message = 'Too many requests') {
     super(message, 429, 'RATE_LIMITED');

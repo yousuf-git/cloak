@@ -1,43 +1,102 @@
 import { createHmac } from 'node:crypto';
 import type { Types } from 'mongoose';
 import { User } from '../models/user.model.js';
+import { Org } from '../models/org.model.js';
+import { Membership } from '../models/membership.model.js';
 import { config } from '../config/index.js';
 import {
   hashAuthHash,
   verifyAuthHash,
 } from '../lib/hashing.js';
 import { signRecoveryToken, verifyRecoveryToken } from '../lib/jwt.js';
-import { ConflictError, UnauthorizedError } from '../lib/errors.js';
+import { ConflictError, EmailNotVerifiedError, UnauthorizedError } from '../lib/errors.js';
 import { createOtp, verifyOtp, type OtpVerifyResult } from './otp.service.js';
 import { sendOtpEmail, sendVerificationEmail, sendRecoveryEmail } from './email.service.js';
 import { issueTokenPair, revokeAllForUser, type TokenPair } from './token.service.js';
 
 export interface SignupInput {
   email: string;
+  name: string;
   authHash: string;
   cryptoSalt: string;
   wrappedDEK: string;
   recoveryWrappedDEK: string;
+  identityPublicKey: string;
+  wrappedIdentitySk: string;
+  defaultOrg: {
+    name: string;
+    wrapped_org_dek: string;
+    org_recovery_salt: string;
+    org_recovery_wrappedDEK: string;
+  };
 }
 
-export async function signup(input: SignupInput): Promise<void> {
+/**
+ * Create the account together with its first organization. Orgs are mandatory —
+ * a solo user's vault is an org of one — so signup provisions the user, their
+ * identity keypair, the org, and the owner membership in a single step.
+ */
+export async function signup(input: SignupInput): Promise<{ orgId: string }> {
   const existing = await User.findOne({ email: input.email });
   if (existing) {
+    // Distinguished so the client can offer to finish verifying rather than
+    // leaving the person stuck at "already exists" with no way forward.
+    if (!existing.is_verified) {
+      throw new EmailNotVerifiedError('This email is registered but not verified yet', 409);
+    }
     throw new ConflictError('An account with this email already exists');
   }
 
   const passwordHash = await hashAuthHash(input.authHash);
-  await User.create({
+  const user = await User.create({
     email: input.email,
+    name: input.name,
     password_hash: passwordHash,
     crypto_salt: input.cryptoSalt,
     wrappedDEK: input.wrappedDEK,
     recovery_wrappedDEK: input.recoveryWrappedDEK,
+    identity_public_key: input.identityPublicKey,
+    wrapped_identity_sk: input.wrappedIdentitySk,
     is_verified: false,
+  });
+
+  const org = await Org.create({
+    name: input.defaultOrg.name,
+    owner_id: user._id,
+    org_recovery_salt: input.defaultOrg.org_recovery_salt,
+    org_recovery_wrappedDEK: input.defaultOrg.org_recovery_wrappedDEK,
+  });
+
+  await Membership.create({
+    org_id: org._id,
+    user_id: user._id,
+    role: 'owner',
+    status: 'active',
+    wrapped_org_dek: input.defaultOrg.wrapped_org_dek,
+    joined_at: new Date(),
   });
 
   const code = await createOtp(input.email, 'email_verify');
   await sendVerificationEmail(input.email, code);
+
+  return { orgId: org._id.toString() };
+}
+
+/**
+ * Attach an identity keypair to an account that predates them. The secret half
+ * arrives already wrapped by the user's DEK — the server stores both halves but
+ * can only ever read the public one.
+ */
+export async function setIdentity(
+  userId: Types.ObjectId | string,
+  identityPublicKey: string,
+  wrappedIdentitySk: string,
+): Promise<void> {
+  const result = await User.updateOne(
+    { _id: userId },
+    { $set: { identity_public_key: identityPublicKey, wrapped_identity_sk: wrappedIdentitySk } },
+  );
+  if (result.matchedCount === 0) throw new UnauthorizedError();
 }
 
 export interface PreloginResult {
@@ -65,7 +124,13 @@ function deterministicFakeSalt(email: string): string {
 }
 
 export type LoginOutcome =
-  | { status: 'tokens'; tokens: TokenPair; wrappedDEK: string; userId: Types.ObjectId }
+  | {
+      status: 'tokens';
+      tokens: TokenPair;
+      wrappedDEK: string;
+      wrappedIdentitySk?: string;
+      userId: Types.ObjectId;
+    }
   | { status: '2fa_required' };
 
 export async function login(email: string, authHash: string): Promise<LoginOutcome> {
@@ -74,6 +139,16 @@ export async function login(email: string, authHash: string): Promise<LoginOutco
   // for simplicity, but we always return the same generic error below.
   if (!user || !(await verifyAuthHash(user.password_hash, authHash))) {
     throw new UnauthorizedError('Invalid email or password');
+  }
+
+  // Checked only after the password matches, so an unverified account's state
+  // is never disclosed to someone who cannot already sign in as them. A fresh
+  // code goes out here: whoever gets this far owns the account, and the code
+  // from signup has almost certainly expired by the time they come back.
+  if (!user.is_verified) {
+    const code = await createOtp(email, 'email_verify');
+    await sendVerificationEmail(email, code);
+    throw new EmailNotVerifiedError();
   }
 
   if (user.two_factor_enabled) {
@@ -85,12 +160,19 @@ export async function login(email: string, authHash: string): Promise<LoginOutco
   const tokens = await issueTokenPair(user._id as Types.ObjectId, user.email);
   user.last_login_at = new Date();
   await user.save();
-  return { status: 'tokens', tokens, wrappedDEK: user.wrappedDEK, userId: user._id as Types.ObjectId };
+  return {
+    status: 'tokens',
+    tokens,
+    wrappedDEK: user.wrappedDEK,
+    wrappedIdentitySk: user.wrapped_identity_sk,
+    userId: user._id as Types.ObjectId,
+  };
 }
 
 export interface TwoFactorResult {
   tokens: TokenPair;
   wrappedDEK: string;
+  wrappedIdentitySk?: string;
   userId: Types.ObjectId;
 }
 
@@ -106,7 +188,24 @@ export async function verifyTwoFactor(email: string, code: string): Promise<TwoF
   const tokens = await issueTokenPair(user._id as Types.ObjectId, user.email);
   user.last_login_at = new Date();
   await user.save();
-  return { tokens, wrappedDEK: user.wrappedDEK, userId: user._id as Types.ObjectId };
+  return {
+    tokens,
+    wrappedDEK: user.wrappedDEK,
+    wrappedIdentitySk: user.wrapped_identity_sk,
+    userId: user._id as Types.ObjectId,
+  };
+}
+
+/**
+ * Send a fresh verification code. Returns nothing either way — a caller must
+ * not be able to learn whether an address is registered, or whether it is
+ * already verified, by watching this.
+ */
+export async function resendVerification(email: string): Promise<void> {
+  const user = await User.findOne({ email }).select('is_verified').lean();
+  if (!user || user.is_verified) return;
+  const code = await createOtp(email, 'email_verify');
+  await sendVerificationEmail(email, code);
 }
 
 export async function verifyEmail(email: string, code: string): Promise<void> {
@@ -126,8 +225,11 @@ export async function setTwoFactor(userId: Types.ObjectId | string, enabled: boo
 export interface Profile {
   id: string;
   email: string;
+  name?: string;
   is_verified: boolean;
   two_factor_enabled: boolean;
+  identity_public_key?: string;
+  wrapped_identity_sk?: string;
   created_at: Date;
   last_login_at?: Date;
 }
@@ -140,11 +242,26 @@ export async function getProfile(userId: Types.ObjectId | string): Promise<Profi
   return {
     id: user._id.toString(),
     email: user.email,
+    name: user.name,
     is_verified: user.is_verified,
     two_factor_enabled: user.two_factor_enabled,
+    identity_public_key: user.identity_public_key,
+    wrapped_identity_sk: user.wrapped_identity_sk,
     created_at: user.created_at,
     last_login_at: user.last_login_at,
   };
+}
+
+/** Rename the account holder. The name is metadata — it is never part of any key. */
+export async function updateProfile(
+  userId: Types.ObjectId | string,
+  input: { name: string },
+): Promise<Profile> {
+  const user = await User.findByIdAndUpdate(userId, { $set: { name: input.name } }, { new: true });
+  if (!user) {
+    throw new UnauthorizedError();
+  }
+  return getProfile(user._id);
 }
 
 /** Step 1: email a recovery code. Always succeeds to avoid account enumeration. */
@@ -189,6 +306,7 @@ export interface RecoveryResetInput {
 export interface RecoveryResetResult {
   tokens: TokenPair;
   wrappedDEK: string;
+  wrappedIdentitySk?: string;
   userId: Types.ObjectId;
 }
 
@@ -217,7 +335,14 @@ export async function resetWithRecovery(input: RecoveryResetInput): Promise<Reco
   await revokeAllForUser(user._id as Types.ObjectId);
 
   const tokens = await issueTokenPair(user._id as Types.ObjectId, user.email);
-  return { tokens, wrappedDEK: user.wrappedDEK, userId: user._id as Types.ObjectId };
+  return {
+    tokens,
+    wrappedDEK: user.wrappedDEK,
+    // The DEK is unchanged by a password reset, so the identity envelope that
+    // it wraps still opens — no re-keying needed here.
+    wrappedIdentitySk: user.wrapped_identity_sk,
+    userId: user._id as Types.ObjectId,
+  };
 }
 
 function throwOnOtpFailure(result: OtpVerifyResult): void {
