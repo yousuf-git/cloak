@@ -3,7 +3,7 @@
 > **This is the single-machine, single-user setup.** The app starts its own
 > backend and nobody else connects to it. If you are setting Cloak up for a
 > team — a server other people sign in to — follow
-> [Deploy for your team](README.md#deploy-for-your-team) in the README instead.
+> [Deploy for your team](README.md#-deploy-for-your-team) in the README instead.
 > The two paths do not mix: a build made this way runs its own backend, and a
 > release build does not.
 

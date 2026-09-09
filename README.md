@@ -22,23 +22,23 @@ Your master password and plaintext secrets never leave your machine. Everything 
 
 <br/>
 
-<a href="#deploy-for-your-team"><b>Deploy for your team</b></a>
+<a href="#-deploy-for-your-team"><b>Deploy for your team</b></a>
 &nbsp;·&nbsp;
-<a href="#overview">Overview</a>
+<a href="#-overview">Overview</a>
 &nbsp;·&nbsp;
-<a href="#features">Features</a>
+<a href="#-features">Features</a>
 &nbsp;·&nbsp;
-<a href="#how-it-works">How it works</a>
+<a href="#-how-it-works">How it works</a>
 &nbsp;·&nbsp;
-<a href="#tech-stack">Tech stack</a>
+<a href="#-tech-stack">Tech stack</a>
 &nbsp;·&nbsp;
-<a href="#project-structure">Project structure</a>
+<a href="#-project-structure">Project structure</a>
 &nbsp;·&nbsp;
-<a href="#development-setup">Development setup</a>
+<a href="#-development-setup">Development setup</a>
 &nbsp;·&nbsp;
-<a href="#configuration">Configuration</a>
+<a href="#-configuration">Configuration</a>
 &nbsp;·&nbsp;
-<a href="#security-model">Security model</a>
+<a href="#-security-model">Security model</a>
 
 </div>
 
@@ -439,7 +439,7 @@ On first launch the app asks which server to connect to — enter `http://localh
 
 > Prefer a quick look without native tooling? `pnpm dev:desktop:ui` runs the UI in the browser, and the in-app **Sandbox** button lets you explore with dummy data — no API or account needed.
 
-> Running the whole thing on one machine as a single user, with the app starting its own backend? That is a separate setup, documented in [`LOCAL_SETUP.md`](LOCAL_SETUP.md). It is not how you deploy for a team — use [Deploy for your team](#deploy-for-your-team) for that.
+> Running the whole thing on one machine as a single user, with the app starting its own backend? That is a separate setup, documented in [`LOCAL_SETUP.md`](LOCAL_SETUP.md). It is not how you deploy for a team — use [Deploy for your team](#-deploy-for-your-team) for that.
 
 ### Build for production
 
