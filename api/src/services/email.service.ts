@@ -106,13 +106,14 @@ export function sendInvitationEmail(
   to: string,
   orgName: string,
   role: string,
-  token: string,
+  joinKey: string,
 ): Promise<void> {
   const days = config.INVITATION_TTL_DAYS;
   const subject = `You've been invited to ${orgName} on Cloak`;
   const text =
     `You've been invited to join ${orgName} on Cloak as ${role}. ` +
-    `Open Cloak, sign in with this email address, and enter this invitation code: ${token}. ` +
+    `Install Cloak, then paste this join key into the first screen: ${joinKey}. ` +
+    `It points the app at your team's server and redeems the invitation in one step. ` +
     `It expires in ${days} days.`;
   const html = renderEmail('invitation', {
     subject,
@@ -121,15 +122,16 @@ export function sendInvitationEmail(
     codeLabel: "You've been invited to",
     orgName,
     role,
-    code: token,
+    code: joinKey,
     codeCaption: `Expires in ${days} days`,
     heading: 'Joining takes two steps',
-    intro: 'Open Cloak, sign in with this email address, and enter the code above to accept.',
+    intro:
+      'Install Cloak and paste the key above into its first screen. The key knows which server to reach, so there is no address to type.',
     paragraphs: [
       "Accepting does not unlock anything on its own \u2014 an admin still has to seal the organization's key to your device. That second step is what keeps these secrets unreadable to our servers.",
     ],
     specs: [
-      { label: 'Step 1', value: 'you enter the code' },
+      { label: 'Step 1', value: 'you paste the join key' },
       { label: 'Step 2', value: 'an admin grants the key' },
       { label: 'Until then', value: 'nothing is readable' },
     ],

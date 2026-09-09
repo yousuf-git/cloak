@@ -5,6 +5,7 @@ import { Org } from '../models/org.model.js';
 import { User } from '../models/user.model.js';
 import { config } from '../config/index.js';
 import { generateOpaqueToken, sha256 } from '../lib/hashing.js';
+import { encodeJoinKey } from '../lib/join-key.js';
 import { ConflictError, NotFoundError, UnauthorizedError, ValidationError } from '../lib/errors.js';
 import { sendInvitationEmail } from './email.service.js';
 
@@ -17,6 +18,17 @@ export interface InvitationView {
   status: 'pending' | 'accepted' | 'revoked';
   expires_at: Date;
   created_at: Date;
+}
+
+/**
+ * What the inviting admin gets back. The join key is live credential material,
+ * so it is returned exactly once, to the person who just minted it — never from
+ * the listing endpoint, which only ever sees hashes.
+ */
+export interface CreatedInvitation extends InvitationView {
+  join_key: string;
+  /** False when Resend is unconfigured, so the UI can tell the admin to hand it over. */
+  emailed: boolean;
 }
 
 function expiryDate(): Date {
@@ -32,7 +44,7 @@ export async function createInvitation(
   invitedBy: Id,
   email: string,
   role: Role,
-): Promise<InvitationView> {
+): Promise<CreatedInvitation> {
   if (role === 'owner') {
     throw new ValidationError('An organization has exactly one owner');
   }
@@ -58,9 +70,10 @@ export async function createInvitation(
   });
 
   const org = await Org.findById(orgId).select('name').lean();
-  await sendInvitationEmail(email, org?.name ?? 'a Cloak organization', role, token);
+  const joinKey = encodeJoinKey(token);
+  await sendInvitationEmail(email, org?.name ?? 'a Cloak organization', role, joinKey);
 
-  return toView(invitation);
+  return { ...toView(invitation), join_key: joinKey, emailed: config.mailConfigured };
 }
 
 export async function listInvitations(orgId: Id): Promise<InvitationView[]> {

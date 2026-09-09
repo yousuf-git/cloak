@@ -2,14 +2,20 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vites
 import mongoose from 'mongoose';
 import request from 'supertest';
 
-const invitationTokens: string[] = [];
+/** Join keys as emailed. Tests unwrap them to the raw token they carry. */
+const invitationKeys: string[] = [];
+
+function tokenFromJoinKey(joinKey: string): string {
+  const json = Buffer.from(joinKey.replace(/^cloak_/, ''), 'base64url').toString('utf8');
+  return JSON.parse(json).t as string;
+}
 
 vi.mock('../src/services/email.service.js', () => ({
   sendOtpEmail: vi.fn(async () => {}),
   sendVerificationEmail: vi.fn(async () => {}),
   sendRecoveryEmail: vi.fn(async () => {}),
-  sendInvitationEmail: vi.fn(async (_to: string, _org: string, _role: string, token: string) => {
-    invitationTokens.push(token);
+  sendInvitationEmail: vi.fn(async (_to: string, _org: string, _role: string, joinKey: string) => {
+    invitationKeys.push(joinKey);
   }),
 }));
 
@@ -25,7 +31,7 @@ afterAll(async () => {
   await mongoose.disconnect();
 });
 beforeEach(async () => {
-  invitationTokens.length = 0;
+  invitationKeys.length = 0;
   const { collections } = mongoose.connection;
   await Promise.all(Object.values(collections).map((c) => c.deleteMany({})));
 });
@@ -42,7 +48,7 @@ async function joinOrg(
     .send({ email: invitee.email, role })
     .expect(201);
 
-  const token = invitationTokens.at(-1)!;
+  const token = tokenFromJoinKey(invitationKeys.at(-1)!);
   await request(app)
     .post(`/api/v1/invitations/${token}/accept`)
     .set({ Authorization: `Bearer ${invitee.token}` })
@@ -92,7 +98,7 @@ describe('invitation flow', () => {
       .set(owner.headers)
       .send({ email: invitee.email, role: 'member' })
       .expect(201);
-    const token = invitationTokens.at(-1)!;
+    const token = tokenFromJoinKey(invitationKeys.at(-1)!);
 
     const peek = await request(app)
       .get(`/api/v1/invitations/${token}`)
@@ -153,7 +159,7 @@ describe('invitation flow', () => {
       .set(owner.headers)
       .send({ email: invitee.email, role: 'member' })
       .expect(201);
-    const token = invitationTokens.at(-1)!;
+    const token = tokenFromJoinKey(invitationKeys.at(-1)!);
 
     await request(app)
       .post(`/api/v1/invitations/${token}/accept`)
