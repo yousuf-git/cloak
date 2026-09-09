@@ -1,0 +1,33 @@
+# TLS overlay. Use alongside the base file:
+#
+#   CLOAK_DOMAIN=vault.example.com \
+#     docker compose -f docker-compose.yml -f docker-compose.tls.yml up -d
+#
+# Set PUBLIC_URL=https://vault.example.com in .env to match, or invitation join
+# keys will point somewhere else.
+
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+    environment:
+      CLOAK_DOMAIN: ${CLOAK_DOMAIN:?set CLOAK_DOMAIN to the hostname this server answers on}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - api
+
+  api:
+    # Reachable only through Caddy now. Binding to loopback rather than dropping
+    # the mapping keeps `curl localhost:4000` working for debugging on the host.
+    ports:
+      - '127.0.0.1:4000:4000'
+
+volumes:
+  caddy-data:
+  caddy-config:

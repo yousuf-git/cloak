@@ -1,0 +1,40 @@
+# Cloak server: the API and its database.
+#
+#   ./setup.sh          generate .env with fresh secrets
+#   docker compose up -d
+#
+# Mongo is bound to 127.0.0.1 so it is reachable from this host and from the api
+# container, and from nowhere else. Only the API is meant to face the network.
+
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - mongo-data:/data/db
+    ports:
+      - '127.0.0.1:27017:27017'
+    healthcheck:
+      test: ['CMD', 'mongosh', '--quiet', '--eval', 'db.adminCommand("ping")']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  api:
+    build: .
+    image: cloak-api:local
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # Overrides whatever .env says: inside this network the database is a
+      # service name, not localhost.
+      MONGODB_URI: mongodb://mongo:27017/cloak
+    depends_on:
+      mongo:
+        condition: service_healthy
+    ports:
+      - '${PORT:-4000}:4000'
+
+volumes:
+  mongo-data:

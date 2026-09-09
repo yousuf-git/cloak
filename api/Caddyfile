@@ -1,0 +1,20 @@
+# TLS front door for a publicly reachable Cloak server.
+#
+# Caddy obtains and renews a Let's Encrypt certificate on its own; the only
+# prerequisite is that CLOAK_DOMAIN resolves to this host and ports 80 and 443
+# reach it. Used only with docker-compose.tls.yml.
+
+{$CLOAK_DOMAIN} {
+	encode zstd gzip
+
+	# The API sits on the compose network and is not published to the host when
+	# this overlay is in use, so this is its only route in.
+	reverse_proxy api:4000
+
+	# Rate limiting, auth and CORS are the application's job. Caddy's only
+	# addition is transport security and a sane HSTS policy.
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		-Server
+	}
+}

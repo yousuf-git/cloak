@@ -74,3 +74,58 @@ jobs:
           prerelease: false
           generateReleaseNotes: true
           args: ${{ matrix.args }}
+
+  # The self-hosted backend, shipped as its own asset so an operator can set up
+  # a server without cloning the repository or installing pnpm. Runs after the
+  # installers so it attaches to a release that already exists.
+  server-bundle:
+    needs: publish
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Build the API
+        working-directory: api
+        run: |
+          # npm, not pnpm: the bundle has to install with the tooling an
+          # operator already has, and api/ has no workspace dependencies.
+          npm install --ignore-scripts
+          npm run build
+
+      - name: Assemble the bundle
+        working-directory: api
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          OUT="cloak-server-${GITHUB_REF_NAME}"
+          mkdir -p "../$OUT"
+
+          # A lockfile so `npm ci` on the operator's machine resolves exactly
+          # what was tested here, including the security overrides.
+          npm install --package-lock-only --ignore-scripts
+
+          # dist for the pm2 path (no build step needed), src for the Docker
+          # path (its builder stage compiles) and for anyone who wants to read
+          # or patch what they are running.
+          cp -r dist src templates "../$OUT/"
+          cp package.json package-lock.json tsconfig.json "../$OUT/"
+          cp Dockerfile docker-compose.yml docker-compose.tls.yml Caddyfile "../$OUT/"
+          cp setup.sh .env.example ecosystem.config.cjs README.md "../$OUT/"
+          chmod +x "../$OUT/setup.sh"
+
+          cd ..
+          zip -r "$OUT.zip" "$OUT"
+          sha256sum "$OUT.zip" > "$OUT.zip.sha256"
+          echo "BUNDLE=$OUT.zip" >> "$GITHUB_ENV"
+          echo "Built $OUT.zip for $VERSION"
+
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "${GITHUB_REF_NAME}" "${BUNDLE}" "${BUNDLE}.sha256" --clobber
