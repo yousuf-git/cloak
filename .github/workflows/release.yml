@@ -90,6 +90,11 @@ jobs:
         with:
           node-version: '22'
 
+      # The npm bundled with Node 22 (10.9.8) cannot resolve this dependency
+      # tree from scratch — its peer-set walk dies with "Cannot read properties
+      # of null (reading 'edgesOut')". Same pin as the Dockerfile.
+      - run: npm install -g npm@11
+
       - name: Build the API
         working-directory: api
         run: |
