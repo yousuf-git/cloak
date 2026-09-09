@@ -3,10 +3,15 @@ name: release
 # On-demand only: builds + publishes a GitHub Release when a version tag is
 # pushed (e.g. `git tag v0.2.0 && git push origin v0.2.0`). Ordinary commits to
 # main build nothing. See docs/DISTRIBUTION.md.
+#
+# workflow_dispatch is a dry run of the server bundle alone: it builds and
+# uploads the zip as a workflow artifact, publishing nothing. Use it to check the
+# bundle still assembles without spending a version number to find out.
 on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
 
 # Never run two release builds for the same tag at once.
 concurrency:
@@ -15,6 +20,9 @@ concurrency:
 
 jobs:
   publish:
+    # Only a tag can be released — tauri-action has no release to attach to
+    # otherwise. A manual run skips straight to the bundle.
+    if: startsWith(github.ref, 'refs/tags/')
     permissions:
       contents: write # create the release + upload assets
     strategy:
@@ -80,6 +88,9 @@ jobs:
   # installers so it attaches to a release that already exists.
   server-bundle:
     needs: publish
+    # `always()` so a manual run reaches this job despite `publish` being
+    # skipped; the second clause still blocks it when a real release build fails.
+    if: always() && (needs.publish.result == 'success' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-22.04
     permissions:
       contents: write
@@ -131,6 +142,18 @@ jobs:
           echo "Built $OUT.zip for $VERSION"
 
       - name: Attach to the release
+        if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release upload "${GITHUB_REF_NAME}" "${BUNDLE}" "${BUNDLE}.sha256" --clobber
+
+      # Dry run: keep the zip for inspection instead of publishing it.
+      - name: Upload as a build artifact
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: cloak-server-dry-run
+          path: |
+            ${{ env.BUNDLE }}
+            ${{ env.BUNDLE }}.sha256
+          retention-days: 7

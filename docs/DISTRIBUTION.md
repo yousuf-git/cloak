@@ -65,15 +65,34 @@ gives an immutable ref.
 
 ### Cutting a release
 
-1. Bump the version in `desktop/src-tauri/tauri.conf.json` (`"version"`), commit.
+1. Bump the version in all four places it lives, and commit:
+
+   | File | Field |
+   |---|---|
+   | `desktop/src-tauri/tauri.conf.json` | `version` |
+   | `desktop/src-tauri/Cargo.toml` | `version` (then `cargo update -p cloak`) |
+   | `api/package.json` | `version` — shipped inside the server bundle |
+   | `api/src/lib/version.ts` | `SERVER_VERSION`, and `MIN_CLIENT_VERSION` if this release drops support for older desktop builds |
+
+   `SERVER_VERSION` is what a server reports to the desktop client, so leaving it
+   behind means a client and server that disagree about which is out of date.
+   Bump `API_CONTRACT` only when a change breaks existing clients — the app
+   compares that integer, not the release string, so patch releases never force
+   anyone to upgrade.
+
 2. Tag and push:
    ```bash
    git tag v0.2.0
    git push origin v0.2.0
    ```
-3. GitHub Actions builds all platforms in parallel and publishes a release
-   named `Cloak v0.2.0` with the installers attached.
+3. GitHub Actions builds all platforms in parallel and publishes a release named
+   `Cloak v0.2.0` with the installers attached, then assembles
+   `cloak-server-v0.2.0.zip` and attaches that too.
 4. Within the hour the site's download buttons point at the new assets.
+
+To check the server bundle still assembles without spending a version number on
+finding out, run the workflow manually (`workflow_dispatch`). That skips the
+installers and the release entirely, and leaves the zip as a build artifact.
 
 Keep the tag and `tauri.conf.json` version in sync (tag `v0.2.0` ↔ version
 `0.2.0`).
