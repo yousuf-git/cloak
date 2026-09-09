@@ -10,6 +10,18 @@ macOS `.dmg`) are **built by GitHub Actions and published as GitHub Release
 assets**. The marketing site reads those releases and links its download buttons
 straight at the matching asset for the visitor's OS.
 
+Each release also carries **`cloak-server-v*.zip`**, the self-hosted backend, so
+an operator can stand a server up without cloning the repository or installing
+pnpm. It is assembled by the `server-bundle` job after the installers are
+published, and contains the compiled `dist/`, the source it was compiled from,
+`templates/`, an npm lockfile generated in CI, the Dockerfile and compose files,
+`setup.sh`, `.env.example` and a pm2 config. A `.sha256` accompanies it.
+
+The bundle installs with npm rather than pnpm on purpose: `api/` has no workspace
+dependencies, and an operator should not have to adopt this repository's package
+manager to run the server. The `overrides` block in `api/package.json` carries
+the security pins that `pnpm.overrides` provides inside the workspace.
+
 This is not an arbitrary choice — the web layer is already built for it:
 
 - `web/lib/github.ts` → `getGitHubData()` fetches the latest release from the
