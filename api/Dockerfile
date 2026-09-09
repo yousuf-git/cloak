@@ -1,7 +1,7 @@
 # Cloak API.
 #
 # Debian rather than Alpine on purpose: `argon2` is a native addon, and the musl
-# builds are the ones without prebuilds — on Alpine every image build compiles it
+# builds are the ones without prebuilts — on Alpine every image build compiles it
 # from source, and any mismatch surfaces at runtime as a failed password hash
 # rather than a failed build.
 
@@ -14,32 +14,40 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends python3 make g++ \
  && rm -rf /var/lib/apt/lists/*
 
+# The npm bundled with node:22 (10.9.8) cannot resolve this dependency tree from
+# scratch: its peer-set walk dies with "Cannot read properties of null (reading
+# 'edgesOut')". It handles `npm ci` against a lockfile fine, so only a build
+# without one — straight from the repository — hits it. Upgrading here covers
+# both paths for a few seconds of build time.
+RUN npm install -g npm@11
+
 COPY package*.json ./
+
+# Exactly one install. Doing it again in the runtime stage would need the
+# compiler there too, and the pruned tree below is what that stage copies.
+#
 # The release bundle ships a lockfile; a build straight from the repo has none.
-RUN npm ci || npm install
+RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
 
 COPY tsconfig.json ./
 COPY src ./src
 RUN npm run build
+
+# Drop dev dependencies from the tree the runtime stage will copy. The compiled
+# argon2 binary survives, and was built against this same base image.
+RUN npm prune --omit=dev
 
 # ─── runtime ─────────────────────────────────────────────────────────────────
 FROM node:22-bookworm-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 
-RUN apt-get update \
- && apt-get install -y --no-install-recommends python3 make g++ \
- && rm -rf /var/lib/apt/lists/*
-
-COPY package*.json ./
-RUN (npm ci --omit=dev || npm install --omit=dev) \
- && npm cache clean --force \
- && apt-get purge -y python3 make g++ \
- && apt-get autoremove -y
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/dist ./dist
+COPY package.json ./
 
 # Templates are read from disk at runtime — emails and the status page both live
 # in here, two levels up from dist/lib, which is why the layout is preserved.
-COPY --from=build /app/dist ./dist
 COPY templates ./templates
 
 # Drop root. The app writes nothing to disk; all state is in MongoDB.

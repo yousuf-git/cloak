@@ -27,9 +27,12 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      # Overrides whatever .env says: inside this network the database is a
-      # service name, not localhost.
+      # Both override .env on purpose. Inside this network the database is a
+      # service name rather than localhost, and the container always listens on
+      # 4000 so PORT means "the port on the host" — otherwise setting it in .env
+      # moves the listener and the mapping below points at nothing.
       MONGODB_URI: mongodb://mongo:27017/cloak
+      PORT: 4000
     depends_on:
       mongo:
         condition: service_healthy
