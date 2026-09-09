@@ -1,6 +1,6 @@
 {
   "name": "@cloak/api",
-  "version": "0.0.0",
+  "version": "0.2.0",
   "private": true,
   "author": "M. Yousuf <yousuf.work09@gmail.com> (https://github.com/yousuf-git)",
   "type": "module",

@@ -1,6 +1,6 @@
 [package]
 name = "cloak"
-version = "0.1.0"
+version = "0.2.0"
 description = "Zero-knowledge secrets manager and password vault"
 authors = ["M. Yousuf <yousuf.work09@gmail.com>"]
 license = "MIT"
