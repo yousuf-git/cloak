@@ -13,7 +13,8 @@ use commands::{
   crypto_prepare_signup, crypto_public_key_fingerprint, crypto_recovery_reset,
   crypto_reveal_all_env, crypto_seal_org_dek_for, crypto_session_clear, crypto_session_status,
   crypto_unlock_session, read_text_file, remember_clear, remember_enable, remember_status,
-  remember_try_restore, write_text_file,
+  remember_try_restore, servers_activate, servers_forget, servers_list, servers_save,
+  write_text_file,
 };
 use session::CryptoSession;
 use sidecar::ApiProcess;
@@ -35,10 +36,18 @@ pub fn run() {
 
       // Debug builds leave the backend to `pnpm dev:api` — spawning here would
       // fight it for the port and lose tsx's hot reload.
+      //
+      // Release builds spawn one only when CLOAK_API_DIR was baked in, which
+      // `pnpm ship` does and a CI release build does not. An installed release
+      // therefore never tries to run a backend it has no copy of; it talks to a
+      // self-hosted server chosen on the connect screen instead. A failure here
+      // is logged rather than fatal — the connect screen is still a way out.
       #[cfg(not(debug_assertions))]
-      {
+      if option_env!("CLOAK_API_DIR").is_some_and(|d| !d.is_empty()) {
         use tauri::Manager;
-        sidecar::start(&app.state::<ApiProcess>())?;
+        if let Err(e) = sidecar::start(&app.state::<ApiProcess>()) {
+          log::error!("local backend did not start: {e}");
+        }
       }
 
       Ok(())
@@ -77,6 +86,10 @@ pub fn run() {
       remember_status,
       write_text_file,
       read_text_file,
+      servers_list,
+      servers_save,
+      servers_activate,
+      servers_forget,
     ])
     .build(tauri::generate_context!())
     .expect("error while building tauri application")

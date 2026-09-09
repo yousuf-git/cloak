@@ -52,7 +52,17 @@ interface AuthState {
   orgRecoveryKey: string | null;
   recoveryCtx: RecoveryContext | null;
 
+  /**
+   * Proof that this client holds the server's ownership key. Set by the claim
+   * step on a fresh self-hosted deployment and spent by the next signup; null
+   * on every server that already has an owner.
+   */
+  claimTicket: string | null;
+  /** Invitation token carried in from a pasted join key, redeemed after unlock. */
+  pendingInviteToken: string | null;
+
   boot: () => Promise<void>;
+  setOnboarding: (next: { claimTicket?: string | null; pendingInviteToken?: string | null }) => void;
   signup: (name: string, email: string, password: string, remember: boolean) => Promise<void>;
   setName: (name: string) => Promise<void>;
   acknowledgeRecoveryKey: () => void;
@@ -105,6 +115,10 @@ export const useAuth = create<AuthState>((set, get) => ({
   recoveryKey: null,
   orgRecoveryKey: null,
   recoveryCtx: null,
+  claimTicket: null,
+  pendingInviteToken: null,
+
+  setOnboarding: (next) => set(next),
 
   boot: async () => {
     try {
@@ -140,6 +154,9 @@ export const useAuth = create<AuthState>((set, get) => ({
         recoveryWrappedDEK: payload.recovery_wrapped_dek_b64,
         identityPublicKey: payload.identity_public_key,
         wrappedIdentitySk: payload.wrapped_identity_sk_b64,
+        // Present only when claiming an unowned server. The server spends it
+        // here, atomically, as the owner account is created.
+        ...(get().claimTicket ? { claimTicket: get().claimTicket! } : {}),
         // Every account starts inside an organization, so signup mints its key
         // material in the same step.
         defaultOrg: {
@@ -156,6 +173,9 @@ export const useAuth = create<AuthState>((set, get) => ({
         recoveryKey: payload.recovery_key,
         orgRecoveryKey: payload.org.org_recovery_key,
         pending: { password, cryptoSalt: payload.crypto_salt_b64, remember },
+        // Spent. Keeping it would let a later signup on the same launch try to
+        // claim a server that now has an owner.
+        claimTicket: null,
         busy: false,
       });
     } catch (err) {

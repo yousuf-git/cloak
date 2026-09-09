@@ -1,6 +1,26 @@
-const BASE_URL =
+/**
+ * Which backend this app talks to.
+ *
+ * Cloak is self-hosted, so the address is a runtime choice, not a build
+ * constant: one installer serves every team. The server store overwrites this
+ * from the saved profile before any request goes out.
+ *
+ * What is left here only matters until a server is chosen: the env value for a
+ * bundled build (see `.env.production`), and otherwise the port `pnpm dev:api`
+ * listens on, so a development session works before anyone visits the connect
+ * screen.
+ */
+let BASE_URL =
   (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') ??
   'http://localhost:4000/api/v1';
+
+export function setApiBaseUrl(url: string): void {
+  BASE_URL = url.replace(/\/$/, '');
+}
+
+export function getApiBaseUrl(): string {
+  return BASE_URL;
+}
 
 export class ApiError extends Error {
   code: string;
@@ -156,6 +176,8 @@ export const api = {
     recoveryWrappedDEK: string;
     identityPublicKey: string;
     wrappedIdentitySk: string;
+    /** Proof of the server's ownership key. Only the first account carries one. */
+    claimTicket?: string;
     defaultOrg: {
       name: string;
       wrapped_org_dek: string;
@@ -322,6 +344,16 @@ export interface InvitationDto {
   created_at: string;
 }
 
+/**
+ * Returned once, to the admin who created it. Carries the live join key so it
+ * can be handed over by chat when the server has no mail provider configured.
+ * The listing endpoint never returns this.
+ */
+export interface CreatedInvitationDto extends InvitationDto {
+  join_key: string;
+  emailed: boolean;
+}
+
 export interface AuditEntryDto {
   id: string;
   action: string;
@@ -391,7 +423,7 @@ export const orgApi = {
   listInvitations: (orgId: string) =>
     apiRequest<InvitationDto[]>(`/orgs/${orgId}/invitations`, { auth: true }),
   invite: (orgId: string, email: string, role: Exclude<Role, 'owner'>) =>
-    apiRequest<InvitationDto>(`/orgs/${orgId}/invitations`, {
+    apiRequest<CreatedInvitationDto>(`/orgs/${orgId}/invitations`, {
       method: 'POST',
       body: { email, role },
       auth: true,
