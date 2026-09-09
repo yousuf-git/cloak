@@ -3,13 +3,24 @@ import { createApp } from './app.js';
 import { config } from './config/index.js';
 import { connectDb, disconnectDb } from './lib/db.js';
 import { logger } from './lib/logger.js';
+import { SERVER_VERSION } from './lib/version.js';
+import { sealDeployment } from './services/deployment.service.js';
 
 async function main(): Promise<void> {
   await connectDb();
+  // Before the port opens: a server that cannot be claimed should never accept
+  // a signup, and a claim racing the seal would have nothing to check against.
+  await sealDeployment();
 
   const app = createApp();
   const server: Server = app.listen(config.PORT, () => {
-    logger.info(`cloak-api listening on :${config.PORT} (${config.NODE_ENV})`);
+    logger.info(`cloak-api v${SERVER_VERSION} listening on :${config.PORT} (${config.NODE_ENV})`);
+    logger.info(`status page: ${config.publicUrl}/`);
+    if (!config.publicUrlConfigured && config.isProd) {
+      logger.warn(
+        'PUBLIC_URL is not set — invitation join keys will point at localhost and no teammate will be able to connect',
+      );
+    }
   });
 
   const shutdown = (signal: string): void => {

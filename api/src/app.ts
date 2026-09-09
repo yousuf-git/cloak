@@ -6,6 +6,7 @@ import { requestLogger } from './middlewares/request-logger.js';
 import { apiLimiter } from './middlewares/rate-limit.js';
 import { notFoundHandler, errorHandler } from './middlewares/error-handler.js';
 import { healthRouter } from './routes/health.routes.js';
+import { statusPageRouter } from './routes/server.routes.js';
 import { apiV1Router } from './routes/index.js';
 
 /**
@@ -37,8 +38,10 @@ export function createApp() {
   // 4. Request logging
   app.use(requestLogger);
 
-  // 5. Health/readiness probes (unthrottled, no auth)
+  // 5. Health/readiness probes (unthrottled, no auth) and the operator status
+  // page at "/". Both sit outside /api so they ride no version prefix.
   app.use(healthRouter);
+  app.use(statusPageRouter);
 
   // 6. Global rate limiting + versioned routes
   app.use('/api/', apiLimiter);

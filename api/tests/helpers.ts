@@ -37,6 +37,7 @@ export interface Account {
 /** Sign up, log in, and return everything a request needs: bearer plus org. */
 export async function createAccount(app: Express, email: string, orgName?: string): Promise<Account> {
   const body = signupBody(email, orgName);
+  await allowSignup(email);
   await request(app).post('/api/v1/auth/signup').send(body).expect(201);
 
   // Signup leaves the account unverified, and login now refuses those. These
@@ -71,4 +72,43 @@ export async function createAccount(app: Express, email: string, orgName?: strin
     userId: me.body.data.id,
     headers: { Authorization: `Bearer ${token}`, 'X-Cloak-Org': orgId },
   };
+}
+
+/**
+ * Satisfy the self-hosted signup gate for one address.
+ *
+ * A deployment is invite-only once it has an owner, so these suites mark the
+ * deployment claimed and drop in a pending invitation rather than threading an
+ * ownership claim through every setup. The gate itself is covered in
+ * deployment.test.ts.
+ */
+export async function allowSignup(email: string): Promise<void> {
+  const now = new Date();
+  await mongoose.connection.collection('deployments').updateOne(
+    { _id: 'cloak-deployment' },
+    {
+      $set: {
+        ownership_key_hash: 'a'.repeat(64),
+        ownership_key_fingerprint: 'aaaaaaaa',
+        ownership_key_set_at: now,
+        sealed_by_version: 'test',
+        claimed: true,
+        updated_at: now,
+      },
+      $setOnInsert: { created_at: now },
+    },
+    { upsert: true },
+  );
+
+  await mongoose.connection.collection('invitations').insertOne({
+    org_id: new mongoose.Types.ObjectId(),
+    email: email.toLowerCase(),
+    role: 'member',
+    token_hash: `seeded-${email}`,
+    invited_by: new mongoose.Types.ObjectId(),
+    status: 'pending',
+    expires_at: new Date(Date.now() + 86_400_000),
+    created_at: now,
+    updated_at: now,
+  });
 }

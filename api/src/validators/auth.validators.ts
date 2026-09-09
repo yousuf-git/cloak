@@ -15,6 +15,9 @@ export const signupSchema = z.object({
   recoveryWrappedDEK: b64,
   identityPublicKey: z.string().min(32).max(512),
   wrappedIdentitySk: b64,
+  // Present only for the very first account on a self-hosted deployment, where
+  // it proves the caller holds the server's ownership key.
+  claimTicket: z.string().min(1).max(2048).optional(),
   // Every account starts with an organization; the client mints its key
   // material alongside the account's own.
   defaultOrg: z.object({

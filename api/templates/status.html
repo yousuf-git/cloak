@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>{{TITLE}}</title>
+<style>
+  :root {
+    --bg: #0a0d13;
+    --panel: #121620;
+    --panel-2: #161b27;
+    --line: #232936;
+    --line-soft: #1b202b;
+    --fg: #f4f5f7;
+    --fg-dim: #98a0b0;
+    --fg-mute: #5d6675;
+    --accent: #a78bfa;
+    --ok: #4ade80;
+    --warn: #fbbf24;
+    --bad: #f87171;
+    --mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+    --sans: 'Space Grotesk', 'Avenir Next', -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--bg);
+    background-image:
+      radial-gradient(120% 90% at 12% -12%, rgba(128,103,207,0.22) 0%, rgba(128,103,207,0.04) 46%, rgba(128,103,207,0) 70%),
+      repeating-linear-gradient(180deg, rgba(255,255,255,0.018) 0px, rgba(255,255,255,0.018) 1px, rgba(255,255,255,0) 1px, rgba(255,255,255,0) 3px);
+    color: var(--fg);
+    font-family: var(--sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 940px; margin: 0 auto; padding: 44px 24px 64px; }
+
+  .label {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 2.6px;
+    text-transform: uppercase;
+    color: var(--fg-mute);
+  }
+
+  header { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
+  .brand { display: flex; align-items: center; gap: 13px; }
+  .glyph {
+    width: 38px; height: 38px; border-radius: 10px; flex: none;
+    background: linear-gradient(180deg, #2a2050 0%, #191331 100%);
+    border: 1px solid #4a3b7d; border-top-color: #6b55ad;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--accent);
+  }
+  h1 { margin: 0; font-size: 21px; font-weight: 700; letter-spacing: -0.5px; }
+  .sub { margin-top: 3px; font-family: var(--mono); font-size: 11px; color: var(--fg-mute); letter-spacing: 0.4px; }
+
+  .beacon { display: flex; align-items: center; gap: 9px; padding-top: 6px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 0 rgba(74,222,128,0.55); animation: pulse 2.4s ease-out infinite; }
+  .dot.warn { background: var(--warn); box-shadow: 0 0 0 0 rgba(251,191,36,0.55); }
+  .dot.bad  { background: var(--bad);  box-shadow: 0 0 0 0 rgba(248,113,113,0.55); animation: none; }
+  @keyframes pulse { to { box-shadow: 0 0 0 9px rgba(74,222,128,0); } }
+  .beacon span { font-family: var(--mono); font-size: 10px; letter-spacing: 2.4px; text-transform: uppercase; color: var(--fg-dim); }
+
+  .banner {
+    margin: 26px 0 22px; padding: 18px 22px; border-radius: 12px;
+    border: 1px solid var(--line); border-top-color: #333b4d;
+    background: linear-gradient(180deg, #1a1f2c 0%, #10141d 100%);
+    display: flex; align-items: center; justify-content: space-between; gap: 18px; flex-wrap: wrap;
+  }
+  .banner strong { display: block; font-size: 15px; font-weight: 600; letter-spacing: -0.2px; }
+  .banner p { margin: 4px 0 0; font-size: 13px; color: var(--fg-dim); line-height: 1.5; }
+
+  .grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(268px, 1fr)); }
+  .card {
+    border-radius: 12px; border: 1px solid var(--line-soft); border-top-color: var(--line);
+    background: linear-gradient(180deg, var(--panel-2) 0%, var(--panel) 100%);
+    overflow: hidden;
+  }
+  .card > .head {
+    padding: 12px 16px; border-bottom: 1px solid var(--line-soft);
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  }
+  .rows { padding: 4px 16px 12px; }
+  .row { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; padding: 9px 0; border-bottom: 1px dashed rgba(255,255,255,0.055); }
+  .row:last-child { border-bottom: 0; }
+  .row .k { font-size: 12px; color: var(--fg-mute); white-space: nowrap; }
+  .row .v { font-family: var(--mono); font-size: 12px; color: var(--fg); text-align: right; word-break: break-all; }
+  .row .v.dim { color: var(--fg-dim); }
+
+  .pill {
+    font-family: var(--mono); font-size: 9px; font-weight: 600; letter-spacing: 1.8px; text-transform: uppercase;
+    padding: 4px 9px; border-radius: 999px; white-space: nowrap;
+    border: 1px solid rgba(255,255,255,0.10); color: var(--fg-dim); background: rgba(255,255,255,0.03);
+  }
+  .pill.ok   { color: var(--ok);   border-color: rgba(74,222,128,0.32);  background: rgba(74,222,128,0.09); }
+  .pill.warn { color: var(--warn); border-color: rgba(251,191,36,0.32);  background: rgba(251,191,36,0.09); }
+  .pill.bad  { color: var(--bad);  border-color: rgba(248,113,113,0.32); background: rgba(248,113,113,0.09); }
+
+  .locked {
+    margin-top: 14px; padding: 16px 18px; border-radius: 12px;
+    border: 1px dashed var(--line); background: rgba(255,255,255,0.015);
+  }
+  .locked p { margin: 7px 0 0; font-size: 13px; color: var(--fg-dim); line-height: 1.6; }
+  code { font-family: var(--mono); font-size: 12px; color: var(--accent); background: rgba(167,139,250,0.10); padding: 2px 6px; border-radius: 4px; }
+
+  footer { margin-top: 26px; display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  footer span { font-family: var(--mono); font-size: 10px; letter-spacing: 1.6px; text-transform: uppercase; color: var(--fg-mute); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="brand">
+      <div class="glyph" aria-hidden="true">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+        </svg>
+      </div>
+      <div>
+        <h1 id="server-name">—</h1>
+        <div class="sub"><span id="server-version">—</span> &middot; api contract <span id="api-contract">—</span></div>
+      </div>
+    </div>
+    <div class="beacon"><i class="dot" id="beacon-dot"></i><span id="beacon-text">checking</span></div>
+  </header>
+
+  <div class="banner">
+    <div>
+      <strong id="banner-title">Contacting server…</strong>
+      <p id="banner-note">Reading live status.</p>
+    </div>
+    <span class="pill" id="banner-pill">—</span>
+  </div>
+
+  <div class="grid" id="grid"></div>
+
+  <div class="locked" id="locked" hidden>
+    <div class="label">Detail locked</div>
+    <p>
+      Database, mail and runtime detail are hidden on the public view.
+      Open this page with <code>?key=&lt;HEALTH_TOKEN&gt;</code> — the value your
+      setup script wrote into <code>.env</code> — or sign in to Cloak as the owner.
+    </p>
+  </div>
+
+  <footer>
+    <span id="refreshed">—</span>
+    <span>Cloak self-hosted</span>
+  </footer>
+
+</div>
+
+<script>
+  const BOOTSTRAP = {{BOOTSTRAP}};
+  const ENDPOINT = {{ENDPOINT}};
+  const REFRESH_MS = 5000;
+
+  const $ = (id) => document.getElementById(id);
+
+  function pill(state, text) {
+    return '<span class="pill ' + state + '">' + text + '</span>';
+  }
+
+  function card(title, badge, rows) {
+    const body = rows
+      .filter((r) => r)
+      .map((r) => '<div class="row"><span class="k">' + r[0] + '</span><span class="v' +
+        (r[2] ? ' dim' : '') + '">' + r[1] + '</span></div>')
+      .join('');
+    return '<section class="card"><div class="head"><span class="label">' + title + '</span>' +
+      (badge || '') + '</div><div class="rows">' + body + '</div></section>';
+  }
+
+  function duration(seconds) {
+    const d = Math.floor(seconds / 86400);
+    const h = Math.floor((seconds % 86400) / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = Math.floor(seconds % 60);
+    if (d) return d + 'd ' + h + 'h ' + m + 'm';
+    if (h) return h + 'h ' + m + 'm';
+    if (m) return m + 'm ' + s + 's';
+    return s + 's';
+  }
+
+  function esc(value) {
+    return String(value).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  }
+
+  function render(data, reachable) {
+    $('server-name').textContent = data.name || 'Cloak Server';
+    $('server-version').textContent = data.server_version ? 'v' + data.server_version : '—';
+    $('api-contract').textContent = data.api_contract ?? '—';
+
+    const dbOk = data.checks ? data.checks.database : false;
+    const mailOk = data.checks ? data.checks.email : false;
+
+    // Mail being off is a real limitation but not an outage: invitations still
+    // work by hand, so it degrades rather than fails.
+    let level = 'ok', title = 'Operational', note = 'All dependencies are responding.';
+    if (!reachable) {
+      level = 'bad'; title = 'Unreachable';
+      note = 'The status endpoint stopped responding. The server may be restarting.';
+    } else if (!dbOk) {
+      level = 'bad'; title = 'Database unreachable';
+      note = 'Nothing will work until Mongo is reachable. Check MONGODB_URI and any IP allowlist.';
+    } else if (!mailOk) {
+      level = 'warn'; title = 'Running without email';
+      note = 'Verification codes and invitations are logged, not sent. Set RESEND_API_KEY and RESEND_FROM_EMAIL to enable delivery.';
+    } else if (data.public_url_unset) {
+      level = 'warn'; title = 'PUBLIC_URL is not set';
+      note = 'Join keys will point at localhost and no teammate will be able to connect. Set PUBLIC_URL and restart.';
+    } else if (!data.ownership_claimed) {
+      // Not a fault — it is the expected state of a server nobody has claimed
+      // yet, and the operator's next action belongs here rather than in a doc.
+      title = 'Waiting for its first owner';
+      note = 'Install the Cloak desktop app, point it at this address, and enter the ownership key from your .env to create the owner account.';
+    }
+
+    $('beacon-dot').className = 'dot' + (level === 'ok' ? '' : ' ' + level);
+    $('beacon-text').textContent = level === 'ok' ? 'live' : level === 'warn' ? 'degraded' : 'down';
+    $('banner-title').textContent = title;
+    $('banner-note').textContent = note;
+    $('banner-pill').className = 'pill ' + (level === 'ok' && !data.ownership_claimed ? 'warn' : level);
+    $('banner-pill').textContent = !data.ownership_claimed && level === 'ok'
+      ? 'unclaimed'
+      : level === 'ok' ? 'healthy' : level === 'warn' ? 'degraded' : 'fault';
+
+    const cards = [];
+
+    cards.push(card('Ownership', data.ownership_claimed
+      ? pill('ok', 'claimed')
+      : pill('warn', 'unclaimed'), [
+        ['Status', data.ownership_claimed ? 'Owner account exists' : 'Awaiting first owner'],
+        data.deployment && data.deployment.key_fingerprint
+          ? ['Key fingerprint', esc(data.deployment.key_fingerprint)] : null,
+        data.deployment && data.deployment.sealed_at
+          ? ['Sealed', new Date(data.deployment.sealed_at).toLocaleString(), true] : null,
+        data.deployment && data.deployment.claimed_at
+          ? ['Claimed', new Date(data.deployment.claimed_at).toLocaleString(), true] : null,
+      ]));
+
+    if (data.database) {
+      cards.push(card('Database', dbOk ? pill('ok', 'connected') : pill('bad', 'down'), [
+        ['Name', esc(data.database.name || 'unknown')],
+        ['State', esc(data.database.state)],
+        ['Users', data.counts.users],
+        ['Organizations', data.counts.organizations],
+        ['Memberships', data.counts.memberships],
+      ]));
+
+      cards.push(card('Email (Resend)', mailOk ? pill('ok', 'configured') : pill('warn', 'not set'), [
+        ['API key', data.email.api_key_masked ? esc(data.email.api_key_masked) : 'not set'],
+        ['From', data.email.from ? esc(data.email.from) : 'not set'],
+        ['Fallback', mailOk ? 'not needed' : 'codes go to server logs', true],
+      ]));
+
+      cards.push(card('Runtime', pill('', duration(data.uptime_seconds)), [
+        ['Started', new Date(data.started_at).toLocaleString(), true],
+        ['Node', esc(data.node_version)],
+        ['Platform', esc(data.platform)],
+        ['Memory (RSS)', data.memory_mb.rss + ' MB'],
+        ['Heap used', data.memory_mb.heap_used + ' MB'],
+        ['Public URL', esc(data.public_url)],
+      ]));
+      $('locked').hidden = true;
+    } else {
+      cards.push(card('Dependencies', null, [
+        ['Database', dbOk ? 'reachable' : 'unreachable'],
+        ['Email', mailOk ? 'configured' : 'not configured'],
+      ]));
+      $('locked').hidden = false;
+    }
+
+    $('grid').innerHTML = cards.join('');
+    $('refreshed').textContent = 'refreshed ' + new Date().toLocaleTimeString();
+  }
+
+  render(BOOTSTRAP, true);
+
+  async function tick() {
+    try {
+      const res = await fetch(ENDPOINT, { cache: 'no-store' });
+      if (!res.ok) throw new Error(String(res.status));
+      const body = await res.json();
+      render(body.data, true);
+    } catch {
+      render(BOOTSTRAP, false);
+    }
+  }
+  setInterval(tick, REFRESH_MS);
+</script>
+</body>
+</html>

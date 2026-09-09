@@ -3,6 +3,7 @@ import { config } from '../config/index.js';
 import { NotFoundError } from '../lib/errors.js';
 import { authRouter, meRouter } from './auth.routes.js';
 import { statusRouter } from './health.routes.js';
+import { serverRouter } from './server.routes.js';
 import { vaultRouter } from './vault.routes.js';
 import { orgRouter, invitationRouter } from './org.routes.js';
 
@@ -14,6 +15,7 @@ apiV1Router.get('/', (_req, res) => {
 });
 
 apiV1Router.use('/auth', authRouter);
+apiV1Router.use('/server', serverRouter);
 apiV1Router.use('/status', statusRouter);
 apiV1Router.use('/me', meRouter);
 apiV1Router.use('/vault', vaultRouter);

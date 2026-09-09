@@ -20,7 +20,7 @@ vi.mock('../src/services/email.service.js', () => ({
 }));
 
 const { createApp } = await import('../src/app.js');
-const { signupBody } = await import('./helpers.js');
+const { signupBody, allowSignup } = await import('./helpers.js');
 const app = createApp();
 
 const EMAIL = 'dev@example.com';
@@ -43,6 +43,7 @@ beforeEach(async () => {
 });
 
 async function signup() {
+  await allowSignup(EMAIL);
   return request(app).post('/api/v1/auth/signup').send(SIGNUP).expect(201);
 }
 

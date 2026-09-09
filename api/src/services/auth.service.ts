@@ -3,13 +3,20 @@ import type { Types } from 'mongoose';
 import { User } from '../models/user.model.js';
 import { Org } from '../models/org.model.js';
 import { Membership } from '../models/membership.model.js';
+import { Invitation } from '../models/invitation.model.js';
 import { config } from '../config/index.js';
 import {
   hashAuthHash,
   verifyAuthHash,
 } from '../lib/hashing.js';
 import { signRecoveryToken, verifyRecoveryToken } from '../lib/jwt.js';
-import { ConflictError, EmailNotVerifiedError, UnauthorizedError } from '../lib/errors.js';
+import {
+  ConflictError,
+  EmailNotVerifiedError,
+  ForbiddenError,
+  UnauthorizedError,
+} from '../lib/errors.js';
+import { isClaimed, markClaimed, verifyClaimTicket } from './deployment.service.js';
 import { createOtp, verifyOtp, type OtpVerifyResult } from './otp.service.js';
 import { sendOtpEmail, sendVerificationEmail, sendRecoveryEmail } from './email.service.js';
 import { issueTokenPair, revokeAllForUser, type TokenPair } from './token.service.js';
@@ -23,6 +30,8 @@ export interface SignupInput {
   recoveryWrappedDEK: string;
   identityPublicKey: string;
   wrappedIdentitySk: string;
+  /** Proof of the ownership key. Required for, and only for, the first account. */
+  claimTicket?: string;
   defaultOrg: {
     name: string;
     wrapped_org_dek: string;
@@ -32,11 +41,44 @@ export interface SignupInput {
 }
 
 /**
+ * Who is allowed to open an account on this deployment.
+ *
+ * A self-hosted server is reachable by anyone who finds the address, so signup
+ * is closed by construction: the first account needs the ownership key, and
+ * every account after it needs an invitation addressed to that exact email.
+ */
+async function assertSignupAllowed(email: string, claimTicket?: string): Promise<boolean> {
+  if (!(await isClaimed())) {
+    if (!claimTicket) {
+      throw new ForbiddenError('This server has no owner yet — claim it with the ownership key first');
+    }
+    await verifyClaimTicket(claimTicket);
+    return true;
+  }
+
+  // Someone arriving with a ticket for a server that has since been claimed
+  // needs to hear that, not a generic "invite-only".
+  if (claimTicket) {
+    throw new ConflictError('This server already has an owner');
+  }
+
+  const invited = await Invitation.exists({ email, status: 'pending', expires_at: { $gt: new Date() } });
+  if (!invited) {
+    throw new ForbiddenError(
+      'This server is invite-only. Ask an administrator to send an invitation to this address.',
+    );
+  }
+  return false;
+}
+
+/**
  * Create the account together with its first organization. Orgs are mandatory —
  * a solo user's vault is an org of one — so signup provisions the user, their
  * identity keypair, the org, and the owner membership in a single step.
  */
 export async function signup(input: SignupInput): Promise<{ orgId: string }> {
+  const claimsDeployment = await assertSignupAllowed(input.email, input.claimTicket);
+
   const existing = await User.findOne({ email: input.email });
   if (existing) {
     // Distinguished so the client can offer to finish verifying rather than
@@ -59,6 +101,14 @@ export async function signup(input: SignupInput): Promise<{ orgId: string }> {
     wrapped_identity_sk: input.wrappedIdentitySk,
     is_verified: false,
   });
+
+  // Spend the ownership key before building anything else, and only if this
+  // request won the race for it. A second signup arriving at the same moment
+  // loses here rather than becoming a second owner.
+  if (claimsDeployment && !(await markClaimed(user._id))) {
+    await User.deleteOne({ _id: user._id });
+    throw new ConflictError('This server already has an owner');
+  }
 
   const org = await Org.create({
     name: input.defaultOrg.name,
