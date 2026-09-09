@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Mailbox, Loader2, KeyRound } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
@@ -24,14 +24,30 @@ interface Joined {
  * membership — the vault stays unreadable until an admin grants the key, so the
  * copy says so plainly rather than implying instant access.
  */
-export function InviteAccept({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function InviteAccept({
+  open,
+  initialToken,
+  onClose,
+}: {
+  open: boolean;
+  /** Pre-filled when the user arrived from a join key rather than typing a code. */
+  initialToken?: string | null;
+  onClose: () => void;
+}) {
   const refresh = useOrgs((s) => s.refresh);
   const { data: myFingerprint, isLoading: fingerprintLoading } = useMyFingerprint();
-  const [token, setToken] = useState('');
+  const [token, setToken] = useState(initialToken ?? '');
   const [preview, setPreview] = useState<Preview | null>(null);
   const [joined, setJoined] = useState<Joined | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // The token arrives after this component has mounted, so it is synced rather
+  // than only seeded: the join key is decoded during onboarding, well before
+  // the shell that renders this dialog exists.
+  useEffect(() => {
+    if (initialToken) setToken(initialToken);
+  }, [initialToken]);
 
   const reset = () => {
     setToken('');

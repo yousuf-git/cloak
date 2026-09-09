@@ -21,6 +21,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { TextField } from '@/components/ui/TextField';
 import { Select } from '@/components/ui/Select';
 import { KeyFingerprint } from '@/components/ui/KeyFingerprint';
+import { JoinKeyDialog } from '@/components/JoinKeyDialog';
 import { useMembers, useInvitations, useFingerprint } from '@/hooks/team';
 import { useOrg } from '@/hooks/useOrg';
 import { useAuth } from '@/stores/auth';
@@ -29,13 +30,16 @@ import { ROLE_OPTIONS, roleTone, byRole } from '@/lib/roles';
 import { formatUtcDate } from '@/lib/utils';
 import { RolePermissionsModal } from '@/components/RolePermissionsModal';
 import { MemberDetailPage } from './MemberDetailPage';
-import type { MemberDto, Role } from '@/lib/api';
+import type { CreatedInvitationDto, MemberDto, Role } from '@/lib/api';
 
 export function TeamPage() {
   const { org, role, can } = useOrg();
   const myEmail = useAuth((s) => s.email);
   const { members, isLoading, grant, changeRole, remove, transfer } = useMembers();
   const { invitations, invite, revoke } = useInvitations();
+  // Held so the join key can be handed over after the dialog closes; it is
+  // returned once and never again by the listing endpoint.
+  const [sentInvite, setSentInvite] = useState<CreatedInvitationDto | null>(null);
 
   const [viewing, setViewing] = useState<string | null>(null);
   const [showingRoles, setShowingRoles] = useState(false);
@@ -199,11 +203,13 @@ export function TeamPage() {
         open={inviting}
         onClose={() => setInviting(false)}
         onSubmit={async (email, role) => {
-          await invite(email, role);
+          const created = await invite(email, role);
           setInviting(false);
-          toast.success(`Invitation sent to ${email}`);
+          setSentInvite(created);
         }}
       />
+
+      <JoinKeyDialog invitation={sentInvite} onClose={() => setSentInvite(null)} />
 
       <GrantDialog
         member={granting}

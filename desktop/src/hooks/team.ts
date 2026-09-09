@@ -69,9 +69,12 @@ export function useInvitations() {
   return {
     invitations: query.data ?? [],
     isLoading: query.isLoading,
+    // Returns the created invitation, join key included: the admin needs it in
+    // hand for the case where the server has no mail provider configured.
     invite: async (email: string, role: Exclude<Role, 'owner'>) => {
-      await orgApi.invite(orgId!, email, role);
+      const created = await orgApi.invite(orgId!, email, role);
       await invalidate();
+      return created;
     },
     revoke: async (invitationId: string) => {
       await orgApi.revokeInvitation(orgId!, invitationId);

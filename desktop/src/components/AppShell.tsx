@@ -204,6 +204,14 @@ export function AppShell() {
   const { query, setQuery, clear } = useSearch();
   const { can } = useOrg();
   const [redeeming, setRedeeming] = useState(false);
+
+  // Someone who arrived from a join key has already handed us their invitation
+  // token; opening the redeem dialog for them beats asking for it a second time
+  // when it is sitting in memory.
+  const pendingInviteToken = useAuth((s) => s.pendingInviteToken);
+  useEffect(() => {
+    if (pendingInviteToken) setRedeeming(true);
+  }, [pendingInviteToken]);
   const placeholder = useMemo(
     () => [...NAV, ...TEAM_NAV].find((n) => n.id === active)?.placeholder ?? 'Search…',
     [active],
@@ -345,7 +353,14 @@ export function AppShell() {
         </main>
       </div>
 
-      <InviteAccept open={redeeming} onClose={() => setRedeeming(false)} />
+      <InviteAccept
+        open={redeeming}
+        initialToken={pendingInviteToken}
+        onClose={() => {
+          setRedeeming(false);
+          useAuth.setState({ pendingInviteToken: null });
+        }}
+      />
     </div>
   );
 }
