@@ -530,6 +530,13 @@ pub fn remember_try_restore(
   }
 }
 
+/// Keep a stored Remember-Me entry pointing at the latest refresh token. A
+/// no-op when the user did not ask to be remembered.
+#[tauri::command]
+pub fn remember_update_token(refresh_token: String) -> Result<(), String> {
+  keystore::update_refresh_token(&refresh_token)
+}
+
 #[tauri::command]
 pub fn remember_clear() -> Result<(), String> {
   keystore::clear()

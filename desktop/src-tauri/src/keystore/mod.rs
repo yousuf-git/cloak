@@ -37,6 +37,27 @@ pub fn save(dek_b64: &str, refresh_token: &str, email: &str) -> Result<(), Strin
   entry()?.set_password(&json).map_err(|e| e.to_string())
 }
 
+/// Swap in the refresh token the server just rotated to, if Remember-Me is on.
+///
+/// Every refresh revokes the token it spends, so an entry that is not kept in
+/// step holds a dead token and the next launch cannot restore. `stored_at_ms`
+/// is carried over on purpose: the 30-day window runs from when the user chose
+/// to trust this device, not from the last time a token happened to rotate.
+pub fn update_refresh_token(refresh_token: &str) -> Result<(), String> {
+  let e = entry()?;
+  let json = match e.get_password() {
+    Ok(v) => v,
+    Err(keyring::Error::NoEntry) => return Ok(()),
+    Err(err) => return Err(err.to_string()),
+  };
+  let Ok(mut blob) = serde_json::from_str::<RememberBlob>(&json) else {
+    return Ok(());
+  };
+  blob.refresh_token = refresh_token.to_string();
+  let json = serde_json::to_string(&blob).map_err(|e| e.to_string())?;
+  e.set_password(&json).map_err(|e| e.to_string())
+}
+
 /// Check whether a valid (<=30d) Remember-Me entry exists, without loading the
 /// DEK into the session. Purges expired/malformed entries as a side effect.
 pub fn is_active() -> Result<bool, String> {

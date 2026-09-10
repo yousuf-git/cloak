@@ -7,6 +7,7 @@ import {
   clearTokens,
   getRefreshToken,
   onAuthLostHandler,
+  onRefreshRotatedHandler,
   setTokens,
   tryRefresh,
 } from '@/lib/api';
@@ -60,6 +61,12 @@ interface AuthState {
   claimTicket: string | null;
   /** Invitation token carried in from a pasted join key, redeemed after unlock. */
   pendingInviteToken: string | null;
+  /**
+   * A remembered session is on this device but the server did not answer at
+   * launch, so it could be neither restored nor ruled out. Boot runs again
+   * once the server is reachable.
+   */
+  restorePending: boolean;
 
   boot: () => Promise<void>;
   setOnboarding: (next: { claimTicket?: string | null; pendingInviteToken?: string | null }) => void;
@@ -117,28 +124,41 @@ export const useAuth = create<AuthState>((set, get) => ({
   recoveryCtx: null,
   claimTicket: null,
   pendingInviteToken: null,
+  restorePending: false,
 
   setOnboarding: (next) => set(next),
 
   boot: async () => {
+    let pending = false;
     try {
       const restored = await crypto.rememberTryRestore();
       if (restored) {
         setTokens({ refreshToken: restored.refresh_token });
-        const ok = await tryRefresh();
-        if (ok) {
-          set({ status: 'unlocked', email: restored.email });
+        const outcome = await tryRefresh();
+        if (outcome === 'ok') {
+          set({ status: 'unlocked', email: restored.email, restorePending: false });
           await Promise.all([useOrgs.getState().hydrate(), hydrateProfile(set)]);
           return;
         }
-        await crypto.rememberClear().catch(() => {});
+        // Only a rejected token ends the remembered session. An unreachable
+        // server — the local backend still starting, a network drop — keeps it
+        // for another try, instead of silently forgetting this device.
+        if (outcome === 'rejected') await crypto.rememberClear().catch(() => {});
         await crypto.sessionClear().catch(() => {});
         clearTokens();
+        pending = outcome === 'unreachable';
       }
     } catch {
       // Keychain unavailable — degrade to normal login.
     }
-    set({ status: 'locked' });
+    // A re-run can finish after the user started signing in by hand; leave
+    // that flow where it is rather than bouncing it back to the form.
+    const { status } = get();
+    set(
+      status === 'booting' || status === 'locked'
+        ? { status: 'locked', restorePending: pending }
+        : { restorePending: false },
+    );
   },
 
   signup: async (name, email, password, remember) => {
@@ -410,6 +430,10 @@ export const useAuth = create<AuthState>((set, get) => ({
 
   clearError: () => set({ error: null }),
 }));
+
+onRefreshRotatedHandler((refreshToken) => {
+  crypto.rememberUpdateToken(refreshToken).catch(() => {});
+});
 
 onAuthLostHandler(() => {
   // Only an established (unlocked) session can be "lost". A 401 while the user

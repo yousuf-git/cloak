@@ -18,6 +18,8 @@ export function App() {
   const serversLoading = useServers((s) => s.loading);
   const activeId = useServers((s) => s.activeId);
   const serverInfo = useServers((s) => s.info);
+  const reachable = useServers((s) => s.reachable);
+  const restorePending = useAuth((s) => s.restorePending);
   const [minSplash, setMinSplash] = useState(true);
 
   useEffect(() => {
@@ -29,6 +31,12 @@ export function App() {
     void loadServers().then(() => boot());
     return () => clearTimeout(t);
   }, [boot, loadServers]);
+
+  // A remembered session that could not be checked at launch, because the
+  // server was not answering yet, is tried again the moment it does.
+  useEffect(() => {
+    if (reachable && restorePending && status === 'locked') void boot();
+  }, [reachable, restorePending, status, boot]);
 
   const booting = status === 'booting' || serversLoading || minSplash;
   const showShell = status === 'unlocked' || sandbox;

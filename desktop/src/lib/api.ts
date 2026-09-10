@@ -36,6 +36,35 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * The request never reached the server. WebKit reports this as a bare
+ * "Load failed", which tells the user nothing about what to do next.
+ */
+export class NetworkError extends Error {
+  constructor() {
+    super(`Can't reach the server at ${hostOf(BASE_URL)}. Check that it is running, then try again.`);
+    this.name = 'NetworkError';
+  }
+}
+
+/** `host:port` for display, falling back to the raw string if it won't parse. */
+export function hostOf(url: string): string {
+  try {
+    const parsed = new URL(url);
+    return parsed.port ? `${parsed.hostname}:${parsed.port}` : parsed.hostname;
+  } catch {
+    return url;
+  }
+}
+
+async function send(url: string, init: RequestInit): Promise<Response> {
+  try {
+    return await fetch(url, init);
+  } catch {
+    throw new NetworkError();
+  }
+}
+
 interface Tokens {
   accessToken: string | null;
   refreshToken: string | null;
@@ -81,6 +110,13 @@ export function onAuthLostHandler(fn: () => void): void {
   onAuthLost = fn;
 }
 
+let onRefreshRotated: ((refreshToken: string) => void) | null = null;
+
+/** Called with every new refresh token, so a persisted copy can follow it. */
+export function onRefreshRotatedHandler(fn: (refreshToken: string) => void): void {
+  onRefreshRotated = fn;
+}
+
 interface RequestOptions {
   method?: string;
   body?: unknown;
@@ -105,24 +141,51 @@ async function parseEnvelope<T>(res: Response): Promise<T> {
   return (json.data ?? json) as T;
 }
 
-export async function tryRefresh(): Promise<boolean> {
+/**
+ * `unreachable` is kept apart from `rejected` because only a rejection means
+ * the session is over. A server that is down or still starting says nothing
+ * about whether the token is good.
+ */
+export type RefreshOutcome = 'ok' | 'rejected' | 'unreachable';
+
+export async function tryRefresh(): Promise<RefreshOutcome> {
   return refreshAccessToken();
 }
 
-async function refreshAccessToken(): Promise<boolean> {
-  if (!tokens.refreshToken) return false;
+let refreshInFlight: Promise<RefreshOutcome> | null = null;
+
+/**
+ * One refresh at a time. The server revokes a refresh token as it spends it,
+ * so when several requests hit an expired access token together, a second
+ * refresh with the same token is rejected and would sign the user out.
+ */
+function refreshAccessToken(): Promise<RefreshOutcome> {
+  refreshInFlight ??= doRefresh().finally(() => {
+    refreshInFlight = null;
+  });
+  return refreshInFlight;
+}
+
+async function doRefresh(): Promise<RefreshOutcome> {
+  if (!tokens.refreshToken) return 'rejected';
+  let res: Response;
   try {
-    const res = await fetch(`${BASE_URL}/auth/refresh`, {
+    res = await fetch(`${BASE_URL}/auth/refresh`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refreshToken: tokens.refreshToken }),
     });
-    if (!res.ok) return false;
+  } catch {
+    return 'unreachable';
+  }
+  if (!res.ok) return 'rejected';
+  try {
     const data = await parseEnvelope<{ accessToken: string; refreshToken: string }>(res);
     setTokens(data);
-    return true;
+    onRefreshRotated?.(data.refreshToken);
+    return 'ok';
   } catch {
-    return false;
+    return 'rejected';
   }
 }
 
@@ -137,7 +200,7 @@ export async function apiRequest<T>(path: string, opts: RequestOptions = {}): Pr
     headers['X-Cloak-Org'] = activeOrgId;
   }
 
-  const res = await fetch(`${BASE_URL}${path}`, {
+  const res = await send(`${BASE_URL}${path}`, {
     method,
     headers,
     body: body === undefined ? undefined : JSON.stringify(body),
@@ -146,9 +209,10 @@ export async function apiRequest<T>(path: string, opts: RequestOptions = {}): Pr
   // Transparent one-shot refresh on 401 for authenticated calls.
   if (res.status === 401 && auth && !_retried) {
     const refreshed = await refreshAccessToken();
-    if (refreshed) {
+    if (refreshed === 'ok') {
       return apiRequest<T>(path, { ...opts, _retried: true });
     }
+    if (refreshed === 'unreachable') throw new NetworkError();
     clearTokens();
     onAuthLost?.();
   }
@@ -279,7 +343,9 @@ export const api = {
 
 export interface ServiceStatusDto {
   api: { ok: boolean };
-  db: { connected: boolean; name: string | null };
+  db: { connected: boolean; name: string | null; cluster: string | null };
+  /** Null when the backend could not be asked. */
+  email: { configured: boolean; api_key_masked: string | null } | null;
 }
 
 export interface ProfileDto {

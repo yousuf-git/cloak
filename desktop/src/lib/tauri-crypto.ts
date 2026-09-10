@@ -119,6 +119,8 @@ export const crypto = {
   rememberEnable: (refreshToken: string, email: string) =>
     invoke<void>('remember_enable', { refreshToken, email }),
   rememberTryRestore: () => invoke<RememberRestoreResult | null>('remember_try_restore'),
+  rememberUpdateToken: (refreshToken: string) =>
+    invoke<void>('remember_update_token', { refreshToken }),
   rememberClear: () => invoke<void>('remember_clear'),
   rememberStatus: () => invoke<boolean>('remember_status'),
 
