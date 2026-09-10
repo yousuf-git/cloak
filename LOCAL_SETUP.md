@@ -109,12 +109,23 @@ entry. Re-running `ship` replaces the binary; the entry persists.
 
 ## How the lifecycle works
 
-**Start.** `sidecar::start()` spawns `node dist/server.js` with `cwd` set to `api/` —
-that cwd is what makes `dotenv` find `api/.env`, so the backend needs no special
-casing. It then blocks until the port accepts a TCP connection (20s timeout). Since
+**Start.** `sidecar::supervise()` spawns `node dist/server.js` on a background thread,
+with `cwd` set to `api/` — that cwd is what makes `dotenv` find `api/.env`, so the
+backend needs no special casing. The window opens straight away; the sign-in screen
+shows "Starting the local server…" until the port accepts a TCP connection. Since
 `server.ts` only calls `listen()` after `connectDb()` resolves, an open port means Mongo
-is connected too. A backend that dies during startup is surfaced immediately via
-`try_wait()` rather than waiting out the timeout.
+is connected too.
+
+**Retries.** Two layers, so they never multiply:
+
+- The backend retries its own database connection — 5 attempts, 1s/2s/4s/8s apart,
+  each capped at 12s so a stalled DNS lookup for a `mongodb+srv://` URI cannot hang
+  it. Each retry, and a final failure, is written to stderr as a `CLOAK_STARTUP` JSON
+  line; the sign-in screen shows "Can't reach the database — retrying (2 of 5)", then
+  why it gave up.
+- The app restarts the process itself only for failures the backend could not report
+  — a crash, 30s of silence, `node` missing — 3 attempts, 2s/4s apart. A reported
+  failure is final. Either way the sign-in screen then offers **Retry**.
 
 **Stop, normal.** Closing the window fires `RunEvent::Exit` → `sidecar::stop()` →
 `Child::kill()` (SIGKILL) → reaped with `wait()`.

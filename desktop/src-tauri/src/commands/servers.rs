@@ -13,7 +13,9 @@ use std::fs;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Manager, State};
+
+use crate::sidecar::{self, ApiProcess, SidecarStatus};
 
 /// A backend this installation knows about. `id` is stable across renames so
 /// the active pointer never dangles.
@@ -35,9 +37,25 @@ pub struct ServerConfig {
   pub servers: Vec<ServerProfile>,
   #[serde(default)]
   pub active_id: Option<String>,
+}
+
+/// What the web layer receives: the stored file plus a fact about this build,
+/// which is kept out of the file because it is recomputed on every launch.
+#[derive(Debug, Serialize)]
+pub struct ServerList {
+  #[serde(flatten)]
+  config: ServerConfig,
   /// True when this build can run its own backend (see `local_available`).
-  #[serde(skip)]
-  pub local_available: bool,
+  local_available: bool,
+}
+
+impl From<ServerConfig> for ServerList {
+  fn from(config: ServerConfig) -> Self {
+    Self {
+      config,
+      local_available: local_available(),
+    }
+  }
 }
 
 fn config_path(app: &AppHandle) -> Result<PathBuf, String> {
@@ -60,18 +78,16 @@ fn local_available() -> bool {
 
 fn load(app: &AppHandle) -> Result<ServerConfig, String> {
   let path = config_path(app)?;
-  let mut config = match fs::read_to_string(&path) {
-    Ok(raw) => serde_json::from_str::<ServerConfig>(&raw).unwrap_or_else(|e| {
+  match fs::read_to_string(&path) {
+    Ok(raw) => Ok(serde_json::from_str::<ServerConfig>(&raw).unwrap_or_else(|e| {
       // A corrupt file must not brick the app: fall back to first-run and let
       // the user re-enter an address rather than refusing to start.
       log::warn!("servers.json is unreadable ({e}) — starting from scratch");
       ServerConfig::default()
-    }),
-    Err(e) if e.kind() == std::io::ErrorKind::NotFound => ServerConfig::default(),
-    Err(e) => return Err(format!("could not read {}: {e}", path.display())),
-  };
-  config.local_available = local_available();
-  Ok(config)
+    })),
+    Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(ServerConfig::default()),
+    Err(e) => Err(format!("could not read {}: {e}", path.display())),
+  }
 }
 
 fn save(app: &AppHandle, config: &ServerConfig) -> Result<(), String> {
@@ -81,8 +97,8 @@ fn save(app: &AppHandle, config: &ServerConfig) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn servers_list(app: AppHandle) -> Result<ServerConfig, String> {
-  load(&app)
+pub fn servers_list(app: AppHandle) -> Result<ServerList, String> {
+  load(&app).map(Into::into)
 }
 
 /// Add a server, or update the one already registered at the same URL.
@@ -95,7 +111,7 @@ pub fn servers_save(
   url: String,
   name: String,
   last_email: Option<String>,
-) -> Result<ServerConfig, String> {
+) -> Result<ServerList, String> {
   let mut config = load(&app)?;
   let url = url.trim_end_matches('/').to_string();
 
@@ -121,29 +137,46 @@ pub fn servers_save(
 
   config.active_id = Some(id);
   save(&app, &config)?;
-  Ok(config)
+  Ok(config.into())
 }
 
 #[tauri::command]
-pub fn servers_activate(app: AppHandle, id: String) -> Result<ServerConfig, String> {
+pub fn servers_activate(app: AppHandle, id: String) -> Result<ServerList, String> {
   let mut config = load(&app)?;
   if !config.servers.iter().any(|s| s.id == id) {
     return Err("no such server".into());
   }
   config.active_id = Some(id);
   save(&app, &config)?;
-  Ok(config)
+  Ok(config.into())
 }
 
 #[tauri::command]
-pub fn servers_forget(app: AppHandle, id: String) -> Result<ServerConfig, String> {
+pub fn servers_forget(app: AppHandle, id: String) -> Result<ServerList, String> {
   let mut config = load(&app)?;
   config.servers.retain(|s| s.id != id);
   if config.active_id.as_deref() == Some(id.as_str()) {
     config.active_id = config.servers.first().map(|s| s.id.clone());
   }
   save(&app, &config)?;
-  Ok(config)
+  Ok(config.into())
+}
+
+/// Where this build's own backend is in starting up. `disabled` in any build
+/// that does not run one, which is every release from CI.
+#[tauri::command]
+pub fn sidecar_status(state: State<'_, ApiProcess>) -> SidecarStatus {
+  state.status()
+}
+
+/// Start the backend again after its retries ran out. Does nothing in any other
+/// state, so a double click cannot spawn a second one.
+#[tauri::command]
+pub fn sidecar_retry(app: AppHandle) -> SidecarStatus {
+  if matches!(app.state::<ApiProcess>().status(), SidecarStatus::Failed { .. }) {
+    sidecar::supervise(app.clone());
+  }
+  app.state::<ApiProcess>().status()
 }
 
 /// Random enough to key a local list. Not a security boundary — these ids never
@@ -155,4 +188,25 @@ fn uuid() -> String {
     .map(|d| d.as_nanos())
     .unwrap_or_default();
   format!("{nanos:x}{:x}", rand::random::<u32>())
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn list_carries_local_available_but_the_file_does_not() {
+    let config = ServerConfig {
+      servers: vec![],
+      active_id: Some("a".into()),
+    };
+
+    let file = serde_json::to_value(&config).unwrap();
+    assert!(file.get("local_available").is_none());
+
+    let wire = serde_json::to_value(ServerList::from(config)).unwrap();
+    assert_eq!(wire["active_id"], "a");
+    assert!(wire["servers"].is_array());
+    assert_eq!(wire["local_available"], local_available());
+  }
 }
