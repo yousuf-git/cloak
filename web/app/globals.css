@@ -59,6 +59,13 @@
     color-scheme: dark;
   }
 
+  /* Next.js scrolls the first non-sticky element into view after a route
+     change, which is this — without a margin it lands under the sticky header.
+     Matches scroll-padding-top above, which only covers hash links. */
+  main {
+    scroll-margin-top: 5rem;
+  }
+
   body {
     margin: 0;
     background-color: var(--color-bg);

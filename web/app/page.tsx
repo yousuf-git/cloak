@@ -1,5 +1,3 @@
-import { Navbar } from "@/components/layout/navbar";
-import { Footer } from "@/components/layout/footer";
 import { Hero } from "@/components/sections/hero";
 import { SocialProofSection } from "@/components/sections/social-proof";
 import { ProductExperienceSection } from "@/components/sections/product-experience";
@@ -17,22 +15,18 @@ export default async function HomePage() {
   const github = await getGitHubData();
 
   return (
-    <>
-      <Navbar repo={github.repo} />
-      <main>
-        <Hero release={github.latestRelease} />
-        <SocialProofSection />
-        <ProductExperienceSection />
-        <WhySection />
-        <WorkflowSection />
-        <FeaturesSection />
-        <TestimonialsSection />
-        <StatsSection />
-        <ShowcaseSection />
-        <FAQSection />
-        <FinalCTA release={github.latestRelease} />
-      </main>
-      <Footer />
-    </>
+    <main>
+      <Hero release={github.latestRelease} />
+      <SocialProofSection />
+      <ProductExperienceSection />
+      <WhySection />
+      <WorkflowSection />
+      <FeaturesSection />
+      <TestimonialsSection />
+      <StatsSection />
+      <ShowcaseSection />
+      <FAQSection />
+      <FinalCTA release={github.latestRelease} />
+    </main>
   );
 }
