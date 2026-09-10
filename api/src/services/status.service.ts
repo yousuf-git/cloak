@@ -41,7 +41,7 @@ export async function serverInfo(): Promise<ServerInfo> {
 }
 
 /** Shows enough of a secret to match it against a dashboard, never enough to use. */
-function mask(secret: string | undefined): string | null {
+export function maskSecret(secret: string | undefined): string | null {
   if (!secret) return null;
   if (secret.length <= 10) return `${secret.slice(0, 2)}${'*'.repeat(6)}`;
   return `${secret.slice(0, 6)}${'*'.repeat(8)}${secret.slice(-4)}`;
@@ -56,6 +56,8 @@ export interface ServerStatus extends ServerInfo {
   database: {
     connected: boolean;
     name: string | null;
+    /** Which server holds the data — the Atlas cluster, or host:port. */
+    cluster: string | null;
     /** Mongoose readyState as a word, so a stuck 'connecting' is visible. */
     state: string;
   };
@@ -107,11 +109,12 @@ export async function serverStatus(): Promise<ServerStatus> {
     database: {
       connected: db.connected,
       name: db.name,
+      cluster: db.cluster,
       state: READY_STATES[mongoose.connection.readyState] ?? 'unknown',
     },
     email: {
       configured: config.mailConfigured,
-      api_key_masked: mask(config.RESEND_API_KEY),
+      api_key_masked: maskSecret(config.RESEND_API_KEY),
       from: config.RESEND_FROM_EMAIL ?? null,
     },
     deployment: {

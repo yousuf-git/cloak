@@ -149,3 +149,26 @@ describe('org scoping', () => {
       .expect(400);
   });
 });
+
+describe('service status', () => {
+  it('requires auth', async () => {
+    await request(app).get('/api/v1/status').expect(401);
+  });
+
+  it('reports the api, the database and email without exposing the key', async () => {
+    const h = await authHeader();
+    const res = await request(app).get('/api/v1/status').set(h).expect(200);
+    expect(res.body.data.api).toEqual({ ok: true });
+    expect(res.body.data.db).toEqual({
+      connected: true,
+      name: 'cloak-test',
+      cluster: '127.0.0.1:27017',
+    });
+    expect(typeof res.body.data.email.configured).toBe('boolean');
+    const masked: string | null = res.body.data.email.api_key_masked;
+    if (masked !== null) {
+      expect(masked).toContain('*');
+      expect(masked).not.toBe(process.env.RESEND_API_KEY);
+    }
+  });
+});
