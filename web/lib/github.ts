@@ -1,4 +1,4 @@
-import { PLATFORMS, SITE } from "@/constants/site";
+import { PLATFORMS, SERVER_BUNDLE, SITE } from "@/constants/site";
 import type {
   GitHubData,
   GitHubRelease,
@@ -41,6 +41,8 @@ interface RawRelease {
   published_at: string;
   body: string;
   html_url: string;
+  prerelease: boolean;
+  draft: boolean;
   assets: Array<{
     name: string;
     browser_download_url: string;
@@ -68,6 +70,7 @@ function mapRelease(raw: RawRelease): GitHubRelease {
     publishedAt: raw.published_at,
     body: raw.body,
     htmlUrl: raw.html_url,
+    prerelease: raw.prerelease,
     assets: raw.assets.map((asset) => ({
       name: asset.name,
       browserDownloadUrl: asset.browser_download_url,
@@ -77,17 +80,47 @@ function mapRelease(raw: RawRelease): GitHubRelease {
   };
 }
 
+/** How many past releases the download page offers. */
+const RELEASE_HISTORY = 20;
+
+/**
+ * Published releases, newest first. One request serves both the site-wide
+ * "latest" and the download page's version picker, so they cannot disagree.
+ */
+export async function getReleases(): Promise<GitHubRelease[]> {
+  const raw = await fetchJson<RawRelease[]>(
+    `${SITE.repoApi}/releases?per_page=${RELEASE_HISTORY}`,
+  );
+  return (raw ?? []).filter((release) => !release.draft).map(mapRelease);
+}
+
+/**
+ * What "latest" means everywhere on the site: the newest release that is not a
+ * pre-release — the same rule as GitHub's own /releases/latest — falling back
+ * to the newest of any kind when every release is a pre-release.
+ */
+export function pickLatest(releases: GitHubRelease[]): GitHubRelease | null {
+  return releases.find((release) => !release.prerelease) ?? releases[0] ?? null;
+}
+
 export async function getGitHubData(): Promise<GitHubData> {
-  const [repoRaw, releasesRaw] = await Promise.all([
+  const [repoRaw, releases] = await Promise.all([
     fetchJson<RawRepo>(SITE.repoApi),
-    fetchJson<RawRelease[]>(`${SITE.repoApi}/releases?per_page=1`),
+    getReleases(),
   ]);
 
   return {
     repo: repoRaw ? mapRepo(repoRaw) : null,
-    latestRelease:
-      releasesRaw && releasesRaw.length > 0 ? mapRelease(releasesRaw[0]) : null,
+    latestRelease: pickLatest(releases),
     fetchedAt: new Date().toISOString(),
+  };
+}
+
+/** The server zip and its checksum file, when the release carries them. */
+export function serverBundle(release: GitHubRelease) {
+  return {
+    zip: release.assets.find((a) => SERVER_BUNDLE.pattern.test(a.name)) ?? null,
+    checksum: release.assets.find((a) => SERVER_BUNDLE.checksumPattern.test(a.name)) ?? null,
   };
 }
 
@@ -160,7 +193,7 @@ export function getDownloadUrl(
   }
 
   return {
-    url: `${SITE.repo}#getting-started`,
+    url: SITE.sourceBuildUrl,
     filename: null,
     kind: "source",
     isSourceBuild: true,

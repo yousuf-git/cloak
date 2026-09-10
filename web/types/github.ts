@@ -22,6 +22,7 @@ export interface GitHubRelease {
   body: string;
   assets: GitHubReleaseAsset[];
   htmlUrl: string;
+  prerelease: boolean;
 }
 
 export interface GitHubData {

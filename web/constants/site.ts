@@ -10,6 +10,18 @@ export const SITE = {
   author: "yousuf-git",
   authorName: "M. Yousuf",
   authorUrl: "https://yousuf-dev.com",
+  /** README section for building from source. The leading hyphen is GitHub's
+   * slug for a heading that starts with an inline image. */
+  sourceBuildUrl: "https://github.com/yousuf-git/cloak#-development-setup",
+} as const;
+
+/**
+ * The self-hosted backend, attached to every release since v0.2.0 alongside
+ * its checksum. Older releases have neither.
+ */
+export const SERVER_BUNDLE = {
+  pattern: /^cloak-server-v[^/]+\.zip$/i,
+  checksumPattern: /^cloak-server-v[^/]+\.zip\.sha256$/i,
 } as const;
 
 // "/#anchor" (not "#anchor") so links resolve from subpages like /download.
