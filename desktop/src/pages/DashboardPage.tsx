@@ -69,7 +69,13 @@ export function DashboardPage({ onNavigate }: { onNavigate: (id: PageId) => void
     api
       .status()
       .then(setService)
-      .catch(() => setService({ api: { ok: false }, db: { connected: false, name: null } }));
+      .catch(() =>
+        setService({
+          api: { ok: false },
+          db: { connected: false, name: null, cluster: null },
+          email: null,
+        }),
+      );
   }, [sandbox]);
 
   const stats = [
@@ -333,6 +339,29 @@ function VaultOrb() {
   );
 }
 
+/**
+ * Resend delivers verification codes, sign-in codes and invitations, so a
+ * server without it cannot onboard anyone — an outage, not a preference.
+ */
+function emailCheck(email: ServiceStatusDto['email']) {
+  if (!email) {
+    return {
+      ok: false,
+      title: 'Email status unknown',
+      hint: 'The backend did not answer',
+      severity: 'danger' as const,
+    };
+  }
+  return {
+    ok: email.configured,
+    title: email.configured ? 'Resend key configured' : 'Resend key missing',
+    hint: email.configured
+      ? `Email delivery · ${email.api_key_masked}`
+      : 'Codes and invitations are only written to the server log',
+    severity: 'danger' as const,
+  };
+}
+
 function SecurityCard({
   twoFactor,
   rememberDevice,
@@ -342,40 +371,45 @@ function SecurityCard({
   rememberDevice: boolean;
   service: ServiceStatusDto | null;
 }) {
-  const checks = [
+  // `severity` is how bad a failed check is. Settings the user can change are
+  // a warning; a service that is down is an outage and reads as one.
+  const checks: { ok: boolean; title: string; hint: string; severity: 'warning' | 'danger' }[] = [
     {
       ok: true,
       title: 'Zero-knowledge encryption',
       hint: 'All keys stored locally',
+      severity: 'warning',
     },
     {
       ok: twoFactor,
       title: twoFactor ? '2FA is enabled' : '2FA is disabled',
       hint: twoFactor ? 'Email + OTP active' : 'Enable it in Settings for extra protection',
-    },
-    {
-      ok: true,
-      title: 'Recovery key set',
-      hint: 'You can recover your account',
+      severity: 'warning',
     },
     {
       ok: rememberDevice,
       title: rememberDevice ? 'Secure device' : 'Standard session',
       hint: rememberDevice ? 'Master key in OS keychain' : 'Sign in required each launch',
+      severity: 'warning',
     },
-    // Sandbox runs with no server behind it, so these two would be meaningless.
+    // Sandbox runs with no server behind it, so these would be meaningless.
     ...(service
       ? [
           {
             ok: service.api.ok,
             title: service.api.ok ? 'Backend online' : 'Backend unreachable',
             hint: service.api.ok ? 'Cloak API responding' : 'Cannot reach the Cloak API',
+            severity: 'danger' as const,
           },
           {
             ok: service.db.connected,
             title: service.db.connected ? 'Database connected' : 'Database unavailable',
-            hint: service.db.name ? `MongoDB · ${service.db.name}` : 'No database connection',
+            hint: service.db.name
+              ? [service.db.cluster, service.db.name].filter(Boolean).join(' · ')
+              : 'No database connection',
+            severity: 'danger' as const,
           },
+          emailCheck(service.email),
         ]
       : []),
   ];
@@ -401,15 +435,13 @@ function SecurityCard({
             <span
               className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full"
               style={{
-                backgroundColor: c.ok
-                  ? 'color-mix(in srgb, var(--color-success) 15%, transparent)'
-                  : 'color-mix(in srgb, var(--color-warning) 15%, transparent)',
+                backgroundColor: `color-mix(in srgb, var(--color-${c.ok ? 'success' : c.severity}) 15%, transparent)`,
               }}
             >
               {c.ok ? (
                 <CheckCircle2 className="h-4 w-4" style={{ color: 'var(--color-success)' }} />
               ) : (
-                <AlertCircle className="h-4 w-4" style={{ color: 'var(--color-warning)' }} />
+                <AlertCircle className="h-4 w-4" style={{ color: `var(--color-${c.severity})` }} />
               )}
             </span>
             <div className="min-w-0">
