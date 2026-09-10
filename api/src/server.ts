@@ -1,3 +1,4 @@
+import { writeSync } from 'node:fs';
 import type { Server } from 'node:http';
 import { createApp } from './app.js';
 import { config } from './config/index.js';
@@ -6,8 +7,38 @@ import { logger } from './lib/logger.js';
 import { SERVER_VERSION } from './lib/version.js';
 import { sealDeployment } from './services/deployment.service.js';
 
+/** Which startup step was running, so a failure can say what broke. */
+type StartupStage = 'database' | 'deployment';
+let stage: StartupStage = 'database';
+
+type StartupEvent =
+  | { event: 'progress'; stage: StartupStage; attempt: number; max_attempts: number; message: string }
+  | { event: 'failure'; stage: StartupStage; message: string };
+
+/**
+ * Tells the desktop app how startup is going, in a form it can parse — the log
+ * lines around it are for people. Written only when running as its sidecar;
+ * the prefix must match `STARTUP_PREFIX` in the Rust core.
+ */
+function reportStartup(event: StartupEvent): void {
+  if (process.env.CLOAK_SIDECAR !== '1') return;
+  // Synchronous: the failure line is followed by process.exit(), and on macOS
+  // a pipe write is asynchronous and would be dropped.
+  writeSync(2, `CLOAK_STARTUP ${JSON.stringify(event)}\n`);
+}
+
 async function main(): Promise<void> {
-  await connectDb();
+  await connectDb({
+    onRetry: ({ attempt, maxAttempts, error }) =>
+      reportStartup({
+        event: 'progress',
+        stage: 'database',
+        attempt,
+        max_attempts: maxAttempts,
+        message: error.message,
+      }),
+  });
+  stage = 'deployment';
   // Before the port opens: a server that cannot be claimed should never accept
   // a signup, and a claim racing the seal would have nothing to check against.
   await sealDeployment();
@@ -59,5 +90,6 @@ process.on('uncaughtException', (err) => {
 
 main().catch((err) => {
   logger.fatal({ err }, 'Failed to start server');
+  reportStartup({ event: 'failure', stage, message: err instanceof Error ? err.message : String(err) });
   process.exit(1);
 });
