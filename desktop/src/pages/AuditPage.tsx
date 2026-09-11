@@ -1,11 +1,12 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ScrollText, Download, Loader2, ShieldCheck, ShieldAlert } from 'lucide-react';
+import { ScrollText, Download, Loader2, ShieldCheck, ShieldAlert, ChevronRight } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { TextField } from '@/components/ui/TextField';
+import { Modal } from '@/components/ui/Modal';
 import { orgApi, type AuditEntryDto, type AuditVerificationDto } from '@/lib/api';
 import { formatUtc } from '@/lib/utils';
 import { useOrg } from '@/hooks/useOrg';
@@ -19,6 +20,7 @@ export function AuditPage() {
   const [cursors, setCursors] = useState<string[]>([]);
   const [integrity, setIntegrity] = useState<AuditVerificationDto | null>(null);
   const [verifying, setVerifying] = useState(false);
+  const [opened, setOpened] = useState<AuditEntryDto | null>(null);
   const cursor = cursors.at(-1);
 
   const query = useQuery({
@@ -133,7 +135,20 @@ export function AuditPage() {
             </thead>
             <tbody>
               {entries.map((entry) => (
-                <tr key={entry.id} className="border-t align-top" style={{ borderColor: 'var(--color-border)' }}>
+                <tr
+                  key={entry.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setOpened(entry)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setOpened(entry);
+                    }
+                  }}
+                  className="cursor-pointer border-t align-top transition-colors hover:bg-black/5 dark:hover:bg-white/5"
+                  style={{ borderColor: 'var(--color-border)' }}
+                >
                   <td className="whitespace-nowrap py-2 pr-4 tabular-nums" style={{ color: 'var(--color-fg-muted)' }}>
                     {formatUtc(entry.created_at)}
                   </td>
@@ -161,7 +176,10 @@ export function AuditPage() {
                     )}
                   </td>
                   <td className="py-2 pr-4 text-xs" style={{ color: 'var(--color-fg-muted)' }}>
-                    {describe(entry)}
+                    <span className="inline-flex items-center gap-1">
+                      {summarize(entry)}
+                      {countsOnly(entry) && <ChevronRight className="h-3 w-3 shrink-0" />}
+                    </span>
                   </td>
                   <td className="py-2" style={{ color: 'var(--color-fg-muted)' }}>
                     {entry.ip ?? '—'}
@@ -191,6 +209,8 @@ export function AuditPage() {
           Older
         </Button>
       </div>
+
+      {opened && <EntryDetail entry={opened} onClose={() => setOpened(null)} />}
     </div>
   );
 }
@@ -249,29 +269,70 @@ function IntegrityBanner({ result }: { result: AuditVerificationDto }) {
   );
 }
 
+/** Context keys holding the names of what changed, and how to say each one. */
+const NAMED_CHANGES = {
+  added: 'added',
+  removed: 'removed',
+  updated: 'changed',
+  fields: 'edited',
+} as const;
+
+type ChangeKey = keyof typeof NAMED_CHANGES;
+
+/** Past this many names, the row counts them and the detail view lists them. */
+const INLINE_NAMES = 3;
+
+type Context = Record<string, unknown>;
+
+function namesIn(context: Context, key: ChangeKey): string[] {
+  const value = context[key];
+  return Array.isArray(value) ? value.map(String) : [];
+}
+
+/** Names the server dropped: it keeps a bounded number per entry. */
+function droppedFrom(context: Context, key: ChangeKey): number {
+  const value = context[`${key}_truncated`];
+  return typeof value === 'number' ? value : 0;
+}
+
+function changeGroups(context: Context): { key: ChangeKey; names: string[]; dropped: number }[] {
+  return (Object.keys(NAMED_CHANGES) as ChangeKey[])
+    .map((key) => ({ key, names: namesIn(context, key), dropped: droppedFrom(context, key) }))
+    .filter((group) => group.names.length > 0);
+}
+
+/**
+ * Whether the row shows counts instead of names — which is also what makes
+ * opening the entry worth the click.
+ */
+function countsOnly(entry: AuditEntryDto): boolean {
+  const groups = changeGroups(entry.context ?? {});
+  return groups.reduce((total, g) => total + g.names.length + g.dropped, 0) > INLINE_NAMES;
+}
+
 /**
  * The context of an entry, in words. The server already renders a flat
  * `detail` string for the CSV; the cases here are the ones worth phrasing
  * properly for someone scanning the table.
+ *
+ * A save that touched fifteen variables is one entry, not fifteen — so the row
+ * has to stay one line. Past a handful of names it counts them instead, and the
+ * names themselves move into the detail view.
  */
-function describe(entry: AuditEntryDto): string {
+function summarize(entry: AuditEntryDto): string {
   const context = entry.context ?? {};
   const parts: string[] = [];
 
-  const listOf = (key: string): string[] => {
-    const value = context[key];
-    return Array.isArray(value) ? value : [];
-  };
+  const groups = changeGroups(context);
+  const brief = countsOnly(entry);
+  for (const { key, names, dropped } of groups) {
+    parts.push(
+      brief
+        ? `${names.length + dropped} ${NAMED_CHANGES[key]}`
+        : `${NAMED_CHANGES[key]} ${names.join(', ')}`,
+    );
+  }
 
-  const added = listOf('added');
-  const removed = listOf('removed');
-  const updated = listOf('updated');
-  const fields = listOf('fields');
-
-  if (added.length) parts.push(`added ${added.join(', ')}`);
-  if (removed.length) parts.push(`removed ${removed.join(', ')}`);
-  if (updated.length) parts.push(`changed ${updated.join(', ')}`);
-  if (fields.length) parts.push(`edited ${fields.join(', ')}`);
   if (context.renamed_from) parts.push(`renamed from ${String(context.renamed_from)}`);
   if (context.from && context.to) parts.push(`${String(context.from)} → ${String(context.to)}`);
   if (context.project) parts.push(`in ${String(context.project)}`);
@@ -282,4 +343,85 @@ function describe(entry: AuditEntryDto): string {
     parts.push(`${String(context.secrets_destroyed)} secrets destroyed`);
 
   return parts.length > 0 ? parts.join(' · ') : entry.detail || '—';
+}
+
+/** Context keys the detail view already renders as their own section. */
+function isChangeKey(key: string): boolean {
+  return Object.keys(NAMED_CHANGES).some((k) => key === k || key === `${k}_truncated`);
+}
+
+function humanize(key: string): string {
+  return key.replace(/_/g, ' ');
+}
+
+/**
+ * One entry in full: what it touched, and every name behind the counts the row
+ * showed. Variable names only — a value has never been written to the trail, so
+ * there is nothing here to hide.
+ */
+function EntryDetail({ entry, onClose }: { entry: AuditEntryDto; onClose: () => void }) {
+  const context = entry.context ?? {};
+  const groups = changeGroups(context);
+  const rest = Object.entries(context).filter(([key]) => !isChangeKey(key));
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      size="lg"
+      title={entry.target_label ?? entry.resource ?? entry.action}
+      description={`${entry.action} · ${entry.actor_email ?? 'unknown actor'} · ${formatUtc(entry.created_at)}`}
+      footer={<Button onClick={onClose}>Close</Button>}
+    >
+      <div className="flex flex-col gap-5 pb-1">
+        {entry.outcome === 'failure' && (
+          <div>
+            <Badge tone="red">failed</Badge>
+          </div>
+        )}
+
+        {groups.map(({ key, names, dropped }) => (
+          <section key={key}>
+            <p className="text-xs font-medium">
+              {names.length + dropped} {NAMED_CHANGES[key]}
+            </p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {names.map((name) => (
+                <code
+                  key={name}
+                  className="rounded-md border px-1.5 py-0.5 text-xs"
+                  style={{ borderColor: 'var(--color-border)', fontFamily: 'var(--font-mono)' }}
+                >
+                  {name}
+                </code>
+              ))}
+            </div>
+            {dropped > 0 && (
+              <p className="mt-1.5 text-xs" style={{ color: 'var(--color-fg-muted)' }}>
+                {dropped} more were {NAMED_CHANGES[key]} but not named — an entry records a limited
+                number of them.
+              </p>
+            )}
+          </section>
+        ))}
+
+        <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1.5 text-xs">
+          {rest.map(([key, value]) => (
+            <Fragment key={key}>
+              <dt style={{ color: 'var(--color-fg-muted)' }}>{humanize(key)}</dt>
+              <dd>{Array.isArray(value) ? value.join(', ') : String(value)}</dd>
+            </Fragment>
+          ))}
+          <dt style={{ color: 'var(--color-fg-muted)' }}>IP</dt>
+          <dd>{entry.ip ?? '—'}</dd>
+          {entry.user_agent && (
+            <>
+              <dt style={{ color: 'var(--color-fg-muted)' }}>device</dt>
+              <dd>{entry.user_agent}</dd>
+            </>
+          )}
+        </dl>
+      </div>
+    </Modal>
+  );
 }
