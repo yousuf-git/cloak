@@ -23,6 +23,7 @@
     "build:desktop": "pnpm --filter @cloak/desktop build",
     "build:web": "pnpm --filter @cloak/web build",
     "ship": "bash scripts/ship.sh",
+    "docs:check": "node scripts/check-doc-links.mjs",
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test"

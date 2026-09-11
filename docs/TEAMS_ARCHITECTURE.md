@@ -133,10 +133,95 @@ were considered and deliberately not built.
 ## Audit
 
 `AuditLog` gains `org_id` and a `{ org_id, created_at: -1 }` compound index that
-backs a keyset-paginated per-org view, plus CSV export. Entries carry action,
-actor, resource id, IP, and user agent — metadata only, never secret plaintext
-or ciphertext, the same rule the trail already followed. A TTL index expires
-rows after `AUDIT_RETENTION_DAYS` (default 365).
+backs a keyset-paginated per-org view, plus CSV export. Metadata only, never
+secret plaintext or ciphertext, the same rule the trail already followed. A TTL
+index expires rows after `AUDIT_RETENTION_DAYS` (default 365).
+
+An entry has to answer "which one, and what changed" without a second lookup, so
+alongside action, actor, resource id, IP and user agent it carries:
+
+- `actor_email` — the address as it read at the time, denormalised so the trail
+  survives a rename or a deleted account, and so a failed sign-in (which has an
+  address but no user) is still attributable.
+- `outcome` — `success` or `failure`. Refused sign-ins, wrong 2FA codes and
+  replayed refresh tokens are recorded, not just the calls that worked.
+- `target_label` — what the thing was called: `.env.production`, `Stripe
+  dashboard`, the member's email.
+- `context` — a small flat map of non-secret descriptors: the project a record
+  is filed under, an env file's tag, a role transition (`from` / `to`), the
+  field names an update touched, counts. For an env-file edit it names the
+  variables added, removed and changed — dotenvx leaves keys in the clear, so
+  those names were already server-visible; the values never enter the trail.
+
+`sanitizeContext` in `api/src/services/audit.service.ts` enforces the shape:
+strings, numbers, booleans and arrays of those, clamped in length and count.
+Nested objects are dropped rather than flattened, which is what stops a whole
+request body from being passed in by accident.
+
+`recordAudit` defaults the actor and org from the request's access token, so a
+call site names them only when they differ — a missing attribution is then a
+deliberate omission rather than a forgotten argument.
+
+### Tamper evidence
+
+A trail that the operator can edit proves nothing to the people it is about, and
+a self-hosted Cloak gives the operator the database. So entries form an
+append-only hash chain: each row stores `prev_hash` and a `hash` over its own
+content plus the hash before it (`api/src/lib/audit-hash.ts`). Editing a field
+breaks that row's own hash; removing one breaks the link at the row after it.
+Either way the break is detectable, and it is detectable *at a position* — the
+verifier reports how many entries are still provably intact and where the trail
+stops being trustworthy.
+
+There is one chain per organization, plus `account` for entries that belong to a
+person rather than an org (sign-ins, session revocations). Per-org rather than
+global so an admin can verify their own trail end to end without reading anyone
+else's rows.
+
+Writers serialise on a unique `{ chain_id, seq }` index rather than a lock: a
+writer reads the head, hashes against it, and inserts. Two writers that read the
+same head both try to claim the same `seq`, one insert fails with a duplicate
+key, and the loser re-reads. The insert is the commit, so a failed write leaves
+no gap behind.
+
+`GET /orgs/:orgId/audit/verify` (role `audit:read`) runs the walk; the desktop
+audit page exposes it as "Check integrity". Verification is not itself audited —
+it changes nothing, and an entry per check would only add noise to the thing
+being checked.
+
+Two honest limits. The chain proves *nobody edited the recorded past*; it does
+not prove the past was recorded, since an operator who patches the server can
+simply not write an entry. And retention (`AUDIT_RETENTION_DAYS`) expires the
+oldest rows, so a chain legitimately stops starting at `seq` 1 — the verifier
+reports that as `truncated` rather than as tampering, and anything before the
+oldest surviving row can no longer be proven either way.
+
+Retention cannot produce a false alarm: TTL deletes only from the oldest end,
+`seq` is assigned at insert so it tracks `created_at`, and the verifier anchors
+on the oldest *surviving* row rather than on `seq` 1.
+
+### Deferred: anchoring the chain outside the server
+
+The first limit above is inherent to any log a single party holds: verification
+runs against the same database the operator controls, so it catches a rewrite of
+history but not a refusal to write it. Closing that needs an anchor the operator
+cannot reach — a copy of the chain head held by someone else.
+
+The cheap version is periodic publication of the head hash: include the current
+`{ chain_id, seq, hash }` in the CSV export, and in a digest email to admins on
+a schedule. Anyone holding an older head can then re-run the verifier from that
+point: a rewrite fails the hashes, and a suppressed entry shows up as a `seq`
+that never advanced, or advanced past entries that no longer exist. Stronger
+anchors — a second server, a git commit, a public transparency log — are the
+same mechanism with a more independent holder.
+
+Deliberately not built. The property it buys only matters when someone has to
+hold the *operator* accountable, and a self-hosted deployment does not support
+that: the operator already has the database, the disk, and break-glass. What the
+chain does buy without an anchor is worth having on its own — an attacker who
+reaches the database later cannot quietly sanitise the history they found there,
+and rewriting it drops from a `mongosh` one-liner to patching running server
+code.
 
 ## Break-glass
 
@@ -149,20 +234,62 @@ client re-seal the Org DEK to their own identity key. Audited as
 
 ## Known limitations
 
-### Deferred: Org DEK rotation on offboarding
+### Offboarding: the exposure report, not key rotation
 
-Removing a member deletes their `Membership` row and revokes their refresh
-tokens. The Org DEK is **not** rotated. A member who cached the key, or who
-copied ciphertext before removal, keeps the ability to decrypt that ciphertext
-indefinitely. Revocation is server-side only.
+Removing a member deletes their `Membership` row, and that is the whole
+operation — `requireOrg` resolves membership on every request, so access ends on
+the next one. Sessions are deliberately untouched: they are account-wide, not
+org-wide, so ending them would sign the person out of organizations the removal
+has nothing to do with.
 
-Closing this would require: generate `OrgDEK'`; walk every secret in the org,
-decrypting with the old key and re-encrypting under the new one; re-seal
-`OrgDEK'` to every remaining member's public key; commit the swap. That job must
-be batched and resumable, the org needs a brief write-lock while it runs, and
-the API has to tolerate two live key generations during the transition. The
-natural trigger is member removal, with a manual "rotate now" action in
-Organization settings.
+The Org DEK is **not** rotated, and rotation is not the remedy people assume it
+is. Membership means holding the organization's key, so for as long as someone
+was a member they could read every secret in it — and a person who can read a
+secret can write it down. Re-encrypting the copy in Cloak does not reach the
+copy in their notes. The thing that actually retires a leaked credential is
+rotating it at the provider that issued it.
+
+So removal shows the admin what to rotate instead.
+`GET /orgs/:orgId/members/:userId/exposure` (role `member:manage`,
+`services/offboarding.service.ts`) returns the organization's secrets by name,
+with the project each is filed under, and marks the ones the audit trail shows
+that member actually opened — those sort first. The desktop removal dialog puts
+this list in front of the admin before they confirm, framed as a rotation
+checklist: change these where they were issued, then save the new values here.
+
+What rotation would still buy, narrowly: it protects the *current* ciphertext
+against an ex-member who kept the old key, in the event of a later, separate
+breach of the database. It does nothing about what they already read. If it is
+ever built, the cost is why it is deferred: generate `OrgDEK'`; walk every
+secret, decrypting with the old key and re-encrypting under the new one; re-seal
+`OrgDEK'` to every remaining member's public key; commit the swap — batched,
+resumable, with a brief org write-lock and two live key generations during the
+transition.
+
+The cheaper structural version, worth doing if the payload schema is ever
+revised: give each record its own key, store `wrapped_record_key =
+XChaCha20(OrgDEK, recordKey)` alongside it, and encrypt fields under
+`recordKey`. Rotation then re-wraps one 32-byte key per record instead of
+rewriting every payload — which matters most for the env-file blobs, the largest
+things in the vault.
+
+### Deferred: correlating the trail with server logs
+
+Audit entries carry no request id, so an operator debugging an incident cannot
+join a row to the pino request log that produced it. `req.id` already exists
+(`api/src/middlewares/request-logger.ts`); the work is to persist it on the
+entry and expose it in the view and the CSV. Held back only because it widens
+the hashed field set, which means a `CHAIN_VERSION` bump.
+
+### Deferred: read events for secrets other than env files
+
+Fetching a `.env` blob is audited (`env:view`), because that call hands back a
+secret payload. Reading a credential, API key, SSH key or backup code is not:
+those arrive as part of the ordinary list responses that the vault pages fetch
+on every visit, so auditing them as written today would produce an entry per
+page load and bury the writes. Doing this properly means separating "list
+metadata" from "reveal this one secret" at the API, and auditing only the
+second. Until then the trail answers *who changed what*, not *who looked*.
 
 ### Public-key substitution
 

@@ -1,6 +1,6 @@
 # Cloak Teams — Implementation Plan
 
-Companion to `docs/TEAMS_ROADMAP.md`. That document parks the *what*; this one is the
+Companion to `docs/plans/TEAMS_ROADMAP.md`. That document parks the *what*; this one is the
 *how*.
 
 **Status: implemented.** Kept as the record of what was planned and why. For how
@@ -20,7 +20,7 @@ taken during the build:
 
 ## Context
 
-`docs/TEAMS_ROADMAP.md` maps five gaps in consumer password managers to candidate
+`docs/plans/TEAMS_ROADMAP.md` maps five gaps in consumer password managers to candidate
 Cloak features: RBAC, audit trails, multi-user management and delegation, secure
 sharing, and surviving offboarding. None of it exists today: every vault resource is
 scoped by `user_id` alone, there is no `role` field anywhere, `ForbiddenError`
@@ -331,7 +331,7 @@ Notes:
   Org DEK to its own public key. Audited as `org:break_glass`.
 - **New `docs/TEAMS_ARCHITECTURE.md`** — the key hierarchy above, the invitation
   sequence, the permission matrix, and an explicit deferred-work section (below).
-- **`docs/TEAMS_ROADMAP.md`** — rewritten from "parked" to implemented, with the two
+- **`docs/plans/TEAMS_ROADMAP.md`** — rewritten from "parked" to implemented, with the two
   deferred items called out.
 - **`docs/CORE_LOGICS.md`** — add the org unlock flow alongside Flows A–F.
 - **`web/content/site-content.ts`** `WHY_MATRIX` — add RBAC, audit trail, and secure team
