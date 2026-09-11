@@ -300,6 +300,23 @@ export const api = {
       auth: true,
     }),
 
+  listSessions: () => apiRequest<{ sessions: SessionDto[] }>('/me/sessions', { auth: true }),
+
+  revokeSession: (sessionId: string) =>
+    apiRequest<{ success: boolean; was_current: boolean }>(`/me/sessions/${sessionId}`, {
+      method: 'DELETE',
+      auth: true,
+    }),
+
+  revokeOtherSessions: () =>
+    apiRequest<{ success: boolean; sessions_ended: number }>('/me/sessions/revoke-others', {
+      method: 'POST',
+      auth: true,
+    }),
+
+  securityLog: (limit = 25) =>
+    apiRequest<{ entries: AuditEntryDto[] }>(`/me/security-log?limit=${limit}`, { auth: true }),
+
   status: () => apiRequest<ServiceStatusDto>('/status', { auth: true }),
 
   me: () => apiRequest<ProfileDto>('/me', { auth: true }),
@@ -423,12 +440,66 @@ export interface CreatedInvitationDto extends InvitationDto {
 export interface AuditEntryDto {
   id: string;
   action: string;
+  outcome: 'success' | 'failure';
   actor_email: string | null;
   resource?: string;
   resource_id?: string;
+  /** What the thing was called at the time — the name, not the id. */
+  target_label?: string;
+  context?: Record<string, string | number | boolean | string[]>;
+  /** The same context rendered as one line, as it appears in the CSV export. */
+  detail: string;
   ip?: string;
   user_agent?: string;
   created_at: string;
+}
+
+/** One signed-in device, as /me/sessions reports it. */
+export interface SessionDto {
+  id: string;
+  started_at: string;
+  last_used_at: string;
+  expires_at: string;
+  ip?: string;
+  user_agent?: string;
+  current: boolean;
+}
+
+export type ExposedKind = 'cred' | 'api_key' | 'access_key' | 'ssh_key' | 'platform' | 'env_file';
+
+export interface ExposedItemDto {
+  kind: ExposedKind;
+  id: string;
+  label: string;
+  project?: string;
+  /** The trail shows they opened this one, not merely that they could. */
+  opened: boolean;
+}
+
+/** What a member could read, listed for the admin removing them. */
+export interface MemberExposureDto {
+  member: { user_id: string; email?: string; role: Role; joined_at?: string; granted_at?: string };
+  items: ExposedItemDto[];
+  counts: Record<ExposedKind, number>;
+  opened_count: number;
+  truncated: boolean;
+}
+
+/** The result of walking the org's audit hash chain. */
+export interface AuditVerificationDto {
+  chain_id: string;
+  ok: boolean;
+  entries_checked: number;
+  first_seq: number | null;
+  last_seq: number | null;
+  /** The chain no longer starts at 1 because retention expired its oldest rows. */
+  truncated: boolean;
+  broken_at: {
+    seq: number;
+    id: string;
+    created_at: string;
+    reason: 'hash_mismatch' | 'broken_link' | 'missing_entry';
+  } | null;
 }
 
 export interface AuditPageDto {
@@ -531,6 +602,12 @@ export const orgApi = {
   },
   exportAudit: (orgId: string) =>
     apiRequest<string>(`/orgs/${orgId}/audit/export.csv`, { auth: true, raw: true }),
+
+  verifyAudit: (orgId: string) =>
+    apiRequest<AuditVerificationDto>(`/orgs/${orgId}/audit/verify`, { auth: true }),
+
+  memberExposure: (orgId: string, userId: string) =>
+    apiRequest<MemberExposureDto>(`/orgs/${orgId}/members/${userId}/exposure`, { auth: true }),
 };
 
 export interface CredDto {

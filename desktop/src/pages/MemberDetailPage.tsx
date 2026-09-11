@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { RemoveMemberDialog } from '@/components/RemoveMemberDialog';
 import { Select } from '@/components/ui/Select';
 import { KeyFingerprint } from '@/components/ui/KeyFingerprint';
 import { useMember, useMemberActivity, useMembers, useFingerprint } from '@/hooks/team';
@@ -27,7 +28,7 @@ import { ROLE_OPTIONS, roleTone } from '@/lib/roles';
  * have done in this organization. Reached only from the team list.
  */
 export function MemberDetailPage({ userId, onBack }: { userId: string; onBack: () => void }) {
-  const { role, can } = useOrg();
+  const { orgId, role, can } = useOrg();
   const { data: member, isLoading } = useMember(userId);
   const { changeRole, remove, transfer } = useMembers();
   const { data: fingerprint, isLoading: fingerprintLoading } = useFingerprint(
@@ -237,12 +238,10 @@ export function MemberDetailPage({ userId, onBack }: { userId: string; onBack: (
         </>
       )}
 
-      <ConfirmDialog
-        open={removing}
-        title={`Remove ${member.name ?? member.email}?`}
-        message="They lose access immediately. Note that this does not rotate the organization's key, so anything they already copied stays readable to them."
-        confirmLabel="Remove"
-        onCancel={() => setRemoving(false)}
+      <RemoveMemberDialog
+        member={removing ? { user_id: member.user_id, email: member.email } : null}
+        orgId={orgId ?? ''}
+        onClose={() => setRemoving(false)}
         onConfirm={async () => {
           await remove(member.user_id);
           setRemoving(false);

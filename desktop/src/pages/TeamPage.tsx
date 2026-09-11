@@ -22,6 +22,7 @@ import { TextField } from '@/components/ui/TextField';
 import { Select } from '@/components/ui/Select';
 import { KeyFingerprint } from '@/components/ui/KeyFingerprint';
 import { JoinKeyDialog } from '@/components/JoinKeyDialog';
+import { RemoveMemberDialog } from '@/components/RemoveMemberDialog';
 import { useMembers, useInvitations, useFingerprint } from '@/hooks/team';
 import { useOrg } from '@/hooks/useOrg';
 import { useAuth } from '@/stores/auth';
@@ -221,15 +222,12 @@ export function TeamPage() {
         }}
       />
 
-      <ConfirmDialog
-        open={Boolean(removing)}
-        title={`Remove ${removing?.email ?? ''}?`}
-        message="They lose access immediately. Note that this does not rotate the organization's key, so anything they already copied stays readable to them."
-        confirmLabel="Remove"
-        onCancel={() => setRemoving(null)}
-        onConfirm={async () => {
-          if (!removing) return;
-          await remove(removing.user_id);
+      <RemoveMemberDialog
+        member={removing}
+        orgId={org?.id ?? ''}
+        onClose={() => setRemoving(null)}
+        onConfirm={async (member) => {
+          await remove(member.user_id);
           setRemoving(null);
           toast.success('Member removed');
         }}

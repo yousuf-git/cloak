@@ -1,17 +1,29 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { motion } from 'framer-motion';
-import { ShieldCheck, Palette, LogOut, Loader2, PlayCircle, KeyRound, UserRound } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  ShieldCheck,
+  Palette,
+  LogOut,
+  Loader2,
+  PlayCircle,
+  KeyRound,
+  UserRound,
+  MonitorSmartphone,
+  History,
+} from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { TextField } from '@/components/ui/TextField';
 import { KeyFingerprint } from '@/components/ui/KeyFingerprint';
-import { api, getRefreshToken } from '@/lib/api';
+import { api, getRefreshToken, type AuditEntryDto, type SessionDto } from '@/lib/api';
 import { crypto } from '@/lib/tauri-crypto';
 import { useAuth } from '@/stores/auth';
 import { useAppMode } from '@/stores/app-mode';
 import { useTheme } from '@/hooks/useTheme';
 import { useMyFingerprint } from '@/hooks/team';
+import { timeAgo, formatUtc } from '@/lib/utils';
 import { toast } from '@/stores/toast';
 
 export function SettingsPage() {
@@ -144,6 +156,10 @@ export function SettingsPage() {
         </Section>
       </div>
 
+      {!sandbox && <SessionsSection />}
+
+      {!sandbox && <SecurityLogSection />}
+
       {!sandbox && (
         <Section
           icon={KeyRound}
@@ -163,6 +179,218 @@ export function SettingsPage() {
       )}
     </div>
   );
+}
+
+/**
+ * Where this account is signed in.
+ *
+ * One row per live refresh-token session, so a revoke here ends that device's
+ * ability to renew — the access token it already holds keeps working for the
+ * few minutes until it expires.
+ */
+function SessionsSection() {
+  const qc = useQueryClient();
+  const logout = useAuth((s) => s.logout);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const query = useQuery({ queryKey: ['sessions'], queryFn: () => api.listSessions() });
+  const sessions = query.data?.sessions ?? [];
+
+  const revoke = async (session: SessionDto) => {
+    setBusy(session.id);
+    try {
+      const result = await api.revokeSession(session.id);
+      if (result.was_current) {
+        await logout();
+        return;
+      }
+      await qc.invalidateQueries({ queryKey: ['sessions'] });
+      toast.success('Device signed out');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not sign that device out');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const revokeOthers = async () => {
+    setBusy('others');
+    try {
+      const result = await api.revokeOtherSessions();
+      await qc.invalidateQueries({ queryKey: ['sessions'] });
+      toast.success(
+        result.sessions_ended === 0
+          ? 'No other devices were signed in'
+          : `Signed out ${result.sessions_ended} other device${result.sessions_ended === 1 ? '' : 's'}`,
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not sign the other devices out');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <Section
+      icon={MonitorSmartphone}
+      title="Where you're signed in"
+      description="Every device holding a live session. Sign one out to cut it off now."
+      className="mt-4"
+      delay={0.12}
+    >
+      {query.isLoading ? (
+        <div className="flex items-center gap-2 p-4 text-sm" style={{ color: 'var(--color-fg-muted)' }}>
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading sessions…
+        </div>
+      ) : sessions.length === 0 ? (
+        <p className="p-4 text-sm" style={{ color: 'var(--color-fg-muted)' }}>
+          No live sessions. Signing in again will start one.
+        </p>
+      ) : (
+        sessions.map((session) => (
+          <div
+            key={session.id}
+            className="flex flex-col items-start justify-between gap-3 p-4 sm:flex-row sm:items-center sm:gap-4"
+          >
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <p className="truncate text-sm font-medium">{describeDevice(session.user_agent)}</p>
+                {session.current && <Badge tone="green">This device</Badge>}
+              </div>
+              <p className="mt-1 text-xs" style={{ color: 'var(--color-fg-muted)' }}>
+                {session.ip ?? 'Unknown address'} · last used {timeAgo(session.last_used_at)} · signed
+                in {formatUtc(session.started_at)}
+              </p>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={busy !== null}
+              onClick={() => revoke(session)}
+            >
+              {busy === session.id ? 'Signing out…' : session.current ? 'Sign out' : 'Revoke'}
+            </Button>
+          </div>
+        ))
+      )}
+
+      <Row label="Sign out everywhere else" hint="Ends every session except this one">
+        <Button
+          size="sm"
+          variant="outline"
+          icon={<LogOut className="h-4 w-4" />}
+          disabled={busy !== null || sessions.length < 2}
+          onClick={revokeOthers}
+        >
+          {busy === 'others' ? 'Signing out…' : 'Sign out others'}
+        </Button>
+      </Row>
+    </Section>
+  );
+}
+
+/**
+ * The account's own security history.
+ *
+ * The org audit log cannot show this: a sign-in belongs to an account, not an
+ * organization, and a refused one has no organization to file it under.
+ */
+function SecurityLogSection() {
+  const query = useQuery({ queryKey: ['security-log'], queryFn: () => api.securityLog() });
+  const entries = query.data?.entries ?? [];
+
+  return (
+    <Section
+      icon={History}
+      title="Recent account activity"
+      description="Sign-ins, sign-outs and security changes on this account."
+      className="mt-4"
+      delay={0.14}
+    >
+      {query.isLoading ? (
+        <div className="flex items-center gap-2 p-4 text-sm" style={{ color: 'var(--color-fg-muted)' }}>
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading activity…
+        </div>
+      ) : entries.length === 0 ? (
+        <p className="p-4 text-sm" style={{ color: 'var(--color-fg-muted)' }}>
+          Nothing recorded yet.
+        </p>
+      ) : (
+        entries.map((entry) => (
+          <div key={entry.id} className="flex items-center justify-between gap-4 px-4 py-2.5">
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="truncate text-sm">{describeEvent(entry)}</span>
+              {entry.outcome === 'failure' && <Badge tone="red">failed</Badge>}
+            </div>
+            <span
+              className="shrink-0 text-xs tabular-nums"
+              style={{ color: 'var(--color-fg-muted)' }}
+              title={formatUtc(entry.created_at)}
+            >
+              {entry.ip ?? 'unknown address'} · {timeAgo(entry.created_at)}
+            </span>
+          </div>
+        ))
+      )}
+    </Section>
+  );
+}
+
+const EVENT_LABELS: Record<string, string> = {
+  'auth:signup': 'Account created',
+  'auth:login': 'Signed in',
+  'auth:login:2fa_challenge': 'Two-factor code sent',
+  'auth:2fa': 'Two-factor code accepted',
+  'auth:2fa_enabled': 'Two-factor sign-in turned on',
+  'auth:2fa_disabled': 'Two-factor sign-in turned off',
+  'auth:verify_email': 'Email address verified',
+  'auth:logout': 'Signed out',
+  'auth:session_revoke': 'A device was signed out',
+  'auth:session_revoke_all': 'Signed out every other device',
+  'auth:refresh_reuse': 'A spent session token was replayed — session ended',
+  'auth:recovery:start': 'Recovery started',
+  'auth:recovery:verify': 'Recovery code checked',
+  'auth:recovery:reset': 'Master password reset with the recovery key',
+  'user:rename': 'Name changed',
+};
+
+function describeEvent(entry: AuditEntryDto): string {
+  const label = EVENT_LABELS[entry.action] ?? entry.action;
+  if (entry.outcome !== 'failure') return label;
+  return entry.action === 'auth:login' ? 'Sign-in refused' : `${label} — refused`;
+}
+
+/** A name for a session's device, read off the User-Agent it signed in with. */
+function describeDevice(userAgent?: string): string {
+  if (!userAgent) return 'Unknown device';
+
+  const client = /Cloak/i.test(userAgent)
+    ? 'Cloak desktop'
+    : /Firefox/i.test(userAgent)
+      ? 'Firefox'
+      : /Edg\//i.test(userAgent)
+        ? 'Edge'
+        : /Chrome/i.test(userAgent)
+          ? 'Chrome'
+          : /Safari/i.test(userAgent)
+            ? 'Safari'
+            : 'Unknown client';
+
+  const os = /Windows/i.test(userAgent)
+    ? 'Windows'
+    : /Mac OS X|Macintosh/i.test(userAgent)
+      ? 'macOS'
+      : /Android/i.test(userAgent)
+        ? 'Android'
+        : /iPhone|iPad/i.test(userAgent)
+          ? 'iOS'
+          : /Linux/i.test(userAgent)
+            ? 'Linux'
+            : null;
+
+  return os ? `${client} on ${os}` : client;
 }
 
 /** Inline rename. The name is metadata only — no key material depends on it. */
