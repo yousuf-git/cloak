@@ -48,6 +48,14 @@ export const refreshSchema = z.object({ refreshToken: z.string().min(1) });
 
 export const logoutSchema = z.object({ refreshToken: z.string().min(1).optional() });
 
+export const securityLogQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+});
+
+export const sessionParamSchema = z.object({
+  sessionId: z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid session id'),
+});
+
 export const setTwoFactorSchema = z.object({ enabled: z.boolean() });
 
 export const resendVerificationSchema = z.object({ email });

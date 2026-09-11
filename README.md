@@ -464,7 +464,8 @@ API configuration is validated at boot with Zod (`api/src/config/index.ts`) — 
 | `HEALTH_TOKEN` | – | – | Unlocks the detailed status page at `/?key=…` for a browser with no session |
 | `SERVER_NAME` | – | `Cloak Server` | Shown on the status page and the app's connect screen |
 | `ACCESS_TOKEN_TTL` | – | `15m` | Access-token lifetime |
-| `REFRESH_TOKEN_TTL` | – | `30d` | Refresh-token lifetime |
+| `REFRESH_TOKEN_TTL` | – | `30d` | Refresh-token lifetime, slid forward on every rotation |
+| `SESSION_MAX_TTL` | – | `90d` | Hard ceiling on one sign-in, regardless of rotation |
 | `OTP_TTL_SECONDS` | – | `600` | One-time code lifetime (seconds) |
 | `RATE_LIMIT_WINDOW_MS` | – | `900000` | Rate-limit window (15 min) |
 | `RATE_LIMIT_AUTH_MAX` | – | `10` | Max failed auth attempts per window |

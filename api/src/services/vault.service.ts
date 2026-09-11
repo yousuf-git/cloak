@@ -1,4 +1,4 @@
-import type { Types } from 'mongoose';
+import { Types } from 'mongoose';
 import { Cred } from '../models/cred.model.js';
 import { ApiKey } from '../models/api-key.model.js';
 import { AccessKey } from '../models/access-key.model.js';
@@ -13,6 +13,13 @@ type Id = Types.ObjectId | string;
 export interface Scope {
   orgId: Id;
   userId: Id;
+}
+
+/** Project name for audit context; undefined when the resource has no project. */
+export async function projectName(orgId: Id, projectId?: Id | null): Promise<string | undefined> {
+  if (!projectId || !Types.ObjectId.isValid(projectId.toString())) return undefined;
+  const project = await Project.findOne({ _id: projectId, org_id: orgId }).select('name').lean();
+  return project?.name;
 }
 
 /**
@@ -44,8 +51,9 @@ export async function updateCred({ orgId }: Scope, id: string, data: Record<stri
 }
 
 export async function deleteCred({ orgId }: Scope, id: string) {
-  const res = await Cred.deleteOne({ _id: id, org_id: orgId });
-  if (res.deletedCount === 0) throw new NotFoundError('Credential not found');
+  const doc = await Cred.findOneAndDelete({ _id: id, org_id: orgId }).lean();
+  if (!doc) throw new NotFoundError('Credential not found');
+  return doc;
 }
 
 // ---------- API Keys ----------
@@ -66,8 +74,9 @@ export async function updateApiKey({ orgId }: Scope, id: string, data: Record<st
 }
 
 export async function deleteApiKey({ orgId }: Scope, id: string) {
-  const res = await ApiKey.deleteOne({ _id: id, org_id: orgId });
-  if (res.deletedCount === 0) throw new NotFoundError('API key not found');
+  const doc = await ApiKey.findOneAndDelete({ _id: id, org_id: orgId }).lean();
+  if (!doc) throw new NotFoundError('API key not found');
+  return doc;
 }
 
 // ---------- Access Keys ----------
@@ -88,8 +97,9 @@ export async function updateAccessKey({ orgId }: Scope, id: string, data: Record
 }
 
 export async function deleteAccessKey({ orgId }: Scope, id: string) {
-  const res = await AccessKey.deleteOne({ _id: id, org_id: orgId });
-  if (res.deletedCount === 0) throw new NotFoundError('Access key not found');
+  const doc = await AccessKey.findOneAndDelete({ _id: id, org_id: orgId }).lean();
+  if (!doc) throw new NotFoundError('Access key not found');
+  return doc;
 }
 
 // ---------- SSH Keys ----------
@@ -110,8 +120,9 @@ export async function updateSshKey({ orgId }: Scope, id: string, data: Record<st
 }
 
 export async function deleteSshKey({ orgId }: Scope, id: string) {
-  const res = await SshKey.deleteOne({ _id: id, org_id: orgId });
-  if (res.deletedCount === 0) throw new NotFoundError('SSH key not found');
+  const doc = await SshKey.findOneAndDelete({ _id: id, org_id: orgId }).lean();
+  if (!doc) throw new NotFoundError('SSH key not found');
+  return doc;
 }
 
 // ---------- Platforms + backup codes ----------
@@ -132,8 +143,9 @@ export async function updatePlatform({ orgId }: Scope, id: string, data: Record<
 }
 
 export async function deletePlatform({ orgId }: Scope, id: string) {
-  const res = await Platform.deleteOne({ _id: id, org_id: orgId });
-  if (res.deletedCount === 0) throw new NotFoundError('Platform not found');
+  const doc = await Platform.findOneAndDelete({ _id: id, org_id: orgId }).lean();
+  if (!doc) throw new NotFoundError('Platform not found');
+  return doc;
 }
 
 export async function addBackupCodes(
@@ -192,6 +204,7 @@ export async function updateProject({ orgId }: Scope, id: string, data: Record<s
 }
 
 export async function deleteProject({ orgId }: Scope, id: string) {
-  const res = await Project.deleteOne({ _id: id, org_id: orgId });
-  if (res.deletedCount === 0) throw new NotFoundError('Project not found');
+  const doc = await Project.findOneAndDelete({ _id: id, org_id: orgId }).lean();
+  if (!doc) throw new NotFoundError('Project not found');
+  return doc;
 }

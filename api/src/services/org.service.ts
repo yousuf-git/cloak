@@ -13,7 +13,6 @@ import { Invitation } from '../models/invitation.model.js';
 import { AuditLog } from '../models/audit-log.model.js';
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '../lib/errors.js';
 import { outranks } from '../lib/permissions.js';
-import { revokeAllForUser } from './token.service.js';
 
 type Id = Types.ObjectId | string;
 
@@ -110,6 +109,17 @@ export async function listOrgsForUser(userId: Id): Promise<OrgSummary[]> {
   }));
 }
 
+/** The actor-facing name of a member, for the audit trail. */
+async function userEmail(userId: Id): Promise<string | undefined> {
+  const user = await User.findById(userId).select('email').lean();
+  return user?.email;
+}
+
+export async function orgName(orgId: Id): Promise<string | undefined> {
+  const org = await Org.findById(orgId).select('name').lean();
+  return org?.name;
+}
+
 export async function renameOrg(orgId: Id, name: string): Promise<{ id: string; name: string }> {
   const org = await Org.findByIdAndUpdate(orgId, { $set: { name } }, { new: true });
   if (!org) throw new NotFoundError('Organization not found');
@@ -120,7 +130,7 @@ export async function renameOrg(orgId: Id, name: string): Promise<{ id: string; 
  * Delete an org and everything in it. Refuses to strand the caller: an account
  * must always have somewhere to keep its secrets.
  */
-export async function deleteOrg(orgId: Id, userId: Id): Promise<void> {
+export async function deleteOrg(orgId: Id, userId: Id): Promise<{ name?: string; destroyed: number; members: number }> {
   const remaining = await Membership.countDocuments({
     user_id: userId,
     status: 'active',
@@ -130,22 +140,41 @@ export async function deleteOrg(orgId: Id, userId: Id): Promise<void> {
     throw new ConflictError('This is your only organization — create another before deleting it');
   }
 
-  await Promise.all([
-    Cred.deleteMany({ org_id: orgId }),
-    ApiKey.deleteMany({ org_id: orgId }),
-    AccessKey.deleteMany({ org_id: orgId }),
-    SshKey.deleteMany({ org_id: orgId }),
-    Platform.deleteMany({ org_id: orgId }),
-    EnvFile.deleteMany({ org_id: orgId }),
-    Project.deleteMany({ org_id: orgId }),
-    Invitation.deleteMany({ org_id: orgId }),
-    Membership.deleteMany({ org_id: orgId }),
-  ]);
+  const name = await orgName(orgId);
+  const [creds, apiKeys, accessKeys, sshKeys, platforms, envFiles, projects, , memberships] =
+    await Promise.all([
+      Cred.deleteMany({ org_id: orgId }),
+      ApiKey.deleteMany({ org_id: orgId }),
+      AccessKey.deleteMany({ org_id: orgId }),
+      SshKey.deleteMany({ org_id: orgId }),
+      Platform.deleteMany({ org_id: orgId }),
+      EnvFile.deleteMany({ org_id: orgId }),
+      Project.deleteMany({ org_id: orgId }),
+      Invitation.deleteMany({ org_id: orgId }),
+      Membership.deleteMany({ org_id: orgId }),
+    ]);
   await Org.deleteOne({ _id: orgId });
+
+  return {
+    name,
+    destroyed:
+      creds.deletedCount +
+      apiKeys.deletedCount +
+      accessKeys.deletedCount +
+      sshKeys.deletedCount +
+      platforms.deletedCount +
+      envFiles.deletedCount +
+      projects.deletedCount,
+    members: memberships.deletedCount,
+  };
 }
 
 /** Hand ownership to another active member; the old owner stays on as admin. */
-export async function transferOwnership(orgId: Id, currentOwnerId: Id, newOwnerId: Id): Promise<void> {
+export async function transferOwnership(
+  orgId: Id,
+  currentOwnerId: Id,
+  newOwnerId: Id,
+): Promise<{ email?: string }> {
   if (currentOwnerId.toString() === newOwnerId.toString()) {
     throw new ValidationError('You already own this organization');
   }
@@ -156,6 +185,8 @@ export async function transferOwnership(orgId: Id, currentOwnerId: Id, newOwnerI
   await Org.updateOne({ _id: orgId }, { $set: { owner_id: newOwnerId } });
   await Membership.updateOne({ org_id: orgId, user_id: newOwnerId }, { $set: { role: 'owner' } });
   await Membership.updateOne({ org_id: orgId, user_id: currentOwnerId }, { $set: { role: 'admin' } });
+
+  return { email: await userEmail(newOwnerId) };
 }
 
 /** The break-glass envelope. Only the owner may fetch it. */
@@ -294,7 +325,7 @@ export async function grantMemberKey(
   targetUserId: Id,
   wrappedOrgDek: string,
   grantedBy: Id,
-): Promise<void> {
+): Promise<{ email?: string; role: Role }> {
   const membership = await Membership.findOne({ org_id: orgId, user_id: targetUserId });
   if (!membership) throw new NotFoundError('Member not found');
   if (membership.status === 'active') {
@@ -308,6 +339,8 @@ export async function grantMemberKey(
   // is new here.
   membership.granted_at = new Date();
   await membership.save();
+
+  return { email: await userEmail(targetUserId), role: membership.role };
 }
 
 export async function changeRole(
@@ -315,7 +348,7 @@ export async function changeRole(
   actorRole: Role,
   targetUserId: Id,
   role: Role,
-): Promise<void> {
+): Promise<{ email?: string; from: Role; to: Role }> {
   if (role === 'owner') {
     throw new ValidationError('Use ownership transfer to make someone the owner');
   }
@@ -326,19 +359,32 @@ export async function changeRole(
     throw new ForbiddenError('You cannot change the role of a member at or above your own level');
   }
 
+  const previous = membership.role;
   membership.role = role;
   await membership.save();
+
+  return { email: await userEmail(targetUserId), from: previous, to: role };
 }
 
 /**
  * Remove a member.
+ *
+ * Deleting the membership row is the whole operation: requireOrg resolves the
+ * caller's membership on every request, so access ends on the next one. The
+ * member's sessions are deliberately left alone — they are account-wide, not
+ * org-wide, and ending them would sign the person out of organizations this
+ * removal has nothing to do with.
  *
  * This revokes server-side access only: the Org DEK is not rotated, so anyone
  * who already held it keeps the ability to decrypt ciphertext they copied
  * beforehand. See "Deferred: Org DEK rotation on offboarding" in
  * docs/TEAMS_ARCHITECTURE.md.
  */
-export async function removeMember(orgId: Id, actorRole: Role, targetUserId: Id): Promise<void> {
+export async function removeMember(
+  orgId: Id,
+  actorRole: Role,
+  targetUserId: Id,
+): Promise<{ email?: string; role: Role }> {
   const membership = await Membership.findOne({ org_id: orgId, user_id: targetUserId });
   if (!membership) throw new NotFoundError('Member not found');
   if (membership.role === 'owner') {
@@ -349,7 +395,6 @@ export async function removeMember(orgId: Id, actorRole: Role, targetUserId: Id)
   }
 
   await Membership.deleteOne({ _id: membership._id });
-  // Their access token still carries no org claim, but the refresh chain should
-  // not survive removal.
-  await revokeAllForUser(new Types.ObjectId(targetUserId.toString()));
+
+  return { email: await userEmail(targetUserId), role: membership.role };
 }

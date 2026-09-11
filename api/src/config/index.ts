@@ -12,6 +12,9 @@ const envSchema = z.object({
   REFRESH_SECRET: z.string().min(32),
   ACCESS_TOKEN_TTL: z.string().default('15m'),
   REFRESH_TOKEN_TTL: z.string().default('30d'),
+  // Hard ceiling on one sign-in. Rotation slides REFRESH_TOKEN_TTL forward, so
+  // without this a session that is used often never ends.
+  SESSION_MAX_TTL: z.string().default('90d'),
 
   OTP_TTL_SECONDS: z.coerce.number().int().positive().default(600),
   INVITATION_TTL_DAYS: z.coerce.number().int().positive().default(7),

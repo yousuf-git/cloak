@@ -37,6 +37,7 @@ scoped.post('/transfer', validate({ body: transferOwnershipSchema }), o.transfer
 
 scoped.get('/members', validate({ query: memberListQuerySchema }), o.listMembers);
 scoped.get('/members/:userId', validate({ params: memberParamSchema }), o.getMember);
+scoped.get('/members/:userId/exposure', validate({ params: memberParamSchema }), o.memberExposure);
 scoped.post(
   '/members/:userId/grant',
   validate({ params: memberParamSchema, body: grantKeySchema }),
@@ -67,6 +68,7 @@ scoped.post('/break-glass/restore', validate({ body: breakGlassRestoreSchema }),
 
 scoped.get('/audit', validate({ query: auditQuerySchema }), o.listAudit);
 scoped.get('/audit/export.csv', validate({ query: auditQuerySchema }), o.exportAudit);
+scoped.get('/audit/verify', o.verifyAudit);
 
 orgRouter.use('/:orgId', scoped);
 

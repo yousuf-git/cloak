@@ -6,6 +6,7 @@ import { UnauthorizedError } from '../lib/errors.js';
 interface AccessTokenPayload {
   sub: string;
   email: string;
+  sid?: string;
 }
 
 /**
@@ -19,7 +20,7 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction): v
   }
   try {
     const payload = jwt.verify(header.slice(7), config.JWT_SECRET) as AccessTokenPayload;
-    req.user = { sub: payload.sub, email: payload.email };
+    req.user = { sub: payload.sub, email: payload.email, sid: payload.sid };
     next();
   } catch {
     throw new UnauthorizedError('Invalid or expired token.');

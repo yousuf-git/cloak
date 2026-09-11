@@ -5,6 +5,7 @@ import { assertCan, type Action } from '../lib/permissions.js';
 import type { Role } from '../models/membership.model.js';
 import * as orgs from '../services/org.service.js';
 import * as invitations from '../services/invitation.service.js';
+import * as offboarding from '../services/offboarding.service.js';
 import * as audit from '../services/audit-query.service.js';
 import { recordAudit } from '../services/audit.service.js';
 import { setIdentity } from '../services/auth.service.js';
@@ -26,13 +27,25 @@ function param(req: Request, key: string): string {
   return Array.isArray(value) ? (value[0] ?? '') : (value ?? '');
 }
 
-function trail(req: Request, action: string, resource: string, resourceId?: string) {
+interface Detail {
+  /** Who or what was acted on, in the words the reader already knows it by. */
+  label?: string | null;
+  context?: Record<string, unknown>;
+}
+
+function trail(
+  req: Request,
+  action: string,
+  resource: string,
+  resourceId?: string,
+  detail: Detail = {},
+) {
   return recordAudit({
     action,
-    orgId: req.org?.id,
-    userId: req.user?.sub,
     resource,
     resourceId,
+    targetLabel: detail.label,
+    context: detail.context,
     req,
   });
 }
@@ -54,29 +67,48 @@ export const listOrgs = asyncHandler(async (req: Request, res: Response) => {
 export const createOrg = asyncHandler(async (req: Request, res: Response) => {
   const { userId } = actor(req);
   const org = await orgs.createOrg(userId, req.body);
-  await recordAudit({ action: 'org:create', orgId: org.id, userId, resource: 'Org', resourceId: org.id, req });
+  await recordAudit({
+    action: 'org:create',
+    orgId: org.id,
+    userId,
+    resource: 'Org',
+    resourceId: org.id,
+    targetLabel: org.name,
+    req,
+  });
   created(res, org);
 });
 
 export const renameOrg = asyncHandler(async (req: Request, res: Response) => {
   const { orgId } = orgContext(req, 'org:manage');
+  const previous = await orgs.orgName(orgId);
   const org = await orgs.renameOrg(orgId, req.body.name);
-  await trail(req, 'org:rename', 'Org', orgId);
+  await trail(req, 'org:rename', 'Org', orgId, {
+    label: org.name,
+    context: { renamed_from: previous },
+  });
   ok(res, org);
 });
 
 export const deleteOrg = asyncHandler(async (req: Request, res: Response) => {
   const { orgId, userId } = orgContext(req, 'org:own');
-  // Audit before the delete: the org's own rows go with it.
-  await trail(req, 'org:delete', 'Org', orgId);
-  await orgs.deleteOrg(orgId, userId);
+  const removed = await orgs.deleteOrg(orgId, userId);
+  // The org's own rows are gone by now; the trail is not deleted with them, so
+  // the entry records what went, not just that something did.
+  await trail(req, 'org:delete', 'Org', orgId, {
+    label: removed.name,
+    context: { secrets_destroyed: removed.destroyed, members: removed.members },
+  });
   ok(res, { success: true });
 });
 
 export const transferOwnership = asyncHandler(async (req: Request, res: Response) => {
   const { orgId, userId } = orgContext(req, 'org:own');
-  await orgs.transferOwnership(orgId, userId, req.body.user_id);
-  await trail(req, 'org:transfer', 'Org', orgId);
+  const newOwner = await orgs.transferOwnership(orgId, userId, req.body.user_id);
+  await trail(req, 'org:transfer', 'Org', orgId, {
+    label: newOwner.email,
+    context: { new_owner: newOwner.email },
+  });
   ok(res, { success: true });
 });
 
@@ -92,27 +124,46 @@ export const getMember = asyncHandler(async (req: Request, res: Response) => {
   ok(res, await orgs.getMemberDetail(orgId, param(req, 'userId')));
 });
 
+/**
+ * What this member could read, for the admin about to remove them. Read-only,
+ * and worth fetching before the removal rather than after: once the membership
+ * row is gone there is nothing left to ask about.
+ */
+export const memberExposure = asyncHandler(async (req: Request, res: Response) => {
+  const { orgId } = orgContext(req, 'member:manage');
+  ok(res, await offboarding.getMemberExposure(orgId, param(req, 'userId')));
+});
+
 export const grantMemberKey = asyncHandler(async (req: Request, res: Response) => {
   const { orgId, userId } = orgContext(req, 'member:manage');
   const targetId = param(req, 'userId');
-  await orgs.grantMemberKey(orgId, targetId, req.body.wrapped_org_dek, userId);
-  await trail(req, 'member:grant', 'Membership', targetId);
+  const granted = await orgs.grantMemberKey(orgId, targetId, req.body.wrapped_org_dek, userId);
+  await trail(req, 'member:grant', 'Membership', targetId, {
+    label: granted.email,
+    context: { role: granted.role },
+  });
   ok(res, { success: true });
 });
 
 export const changeRole = asyncHandler(async (req: Request, res: Response) => {
   const { orgId, role } = orgContext(req, 'member:manage');
   const targetId = param(req, 'userId');
-  await orgs.changeRole(orgId, role, targetId, req.body.role);
-  await trail(req, 'member:role_change', 'Membership', targetId);
+  const changed = await orgs.changeRole(orgId, role, targetId, req.body.role);
+  await trail(req, 'member:role_change', 'Membership', targetId, {
+    label: changed.email,
+    context: { from: changed.from, to: changed.to },
+  });
   ok(res, { success: true });
 });
 
 export const removeMember = asyncHandler(async (req: Request, res: Response) => {
   const { orgId, role } = orgContext(req, 'member:manage');
   const targetId = param(req, 'userId');
-  await orgs.removeMember(orgId, role, targetId);
-  await trail(req, 'member:remove', 'Membership', targetId);
+  const removed = await orgs.removeMember(orgId, role, targetId);
+  await trail(req, 'member:remove', 'Membership', targetId, {
+    label: removed.email,
+    context: { role: removed.role },
+  });
   ok(res, { success: true });
 });
 
@@ -125,15 +176,21 @@ export const listInvitations = asyncHandler(async (req: Request, res: Response) 
 export const createInvitation = asyncHandler(async (req: Request, res: Response) => {
   const { orgId, userId } = orgContext(req, 'member:manage');
   const invitation = await invitations.createInvitation(orgId, userId, req.body.email, req.body.role);
-  await trail(req, 'member:invite', 'Invitation', invitation.id);
+  await trail(req, 'member:invite', 'Invitation', invitation.id, {
+    label: invitation.email,
+    context: { role: invitation.role, emailed: invitation.emailed },
+  });
   created(res, invitation);
 });
 
 export const revokeInvitation = asyncHandler(async (req: Request, res: Response) => {
   const { orgId } = orgContext(req, 'member:manage');
   const invitationId = param(req, 'invitationId');
-  await invitations.revokeInvitation(orgId, invitationId);
-  await trail(req, 'member:invite_revoke', 'Invitation', invitationId);
+  const revoked = await invitations.revokeInvitation(orgId, invitationId);
+  await trail(req, 'member:invite_revoke', 'Invitation', invitationId, {
+    label: revoked.email,
+    context: { role: revoked.role },
+  });
   ok(res, { success: true });
 });
 
@@ -151,6 +208,8 @@ export const acceptInvitation = asyncHandler(async (req: Request, res: Response)
     userId,
     resource: 'Membership',
     resourceId: userId,
+    targetLabel: email,
+    context: { role: result.role, status: result.status },
     req,
   });
   created(res, result);
@@ -159,13 +218,17 @@ export const acceptInvitation = asyncHandler(async (req: Request, res: Response)
 // ---------- Break-glass ----------
 export const startBreakGlass = asyncHandler(async (req: Request, res: Response) => {
   const { orgId } = orgContext(req, 'org:own');
-  ok(res, await orgs.getRecoveryEnvelope(orgId));
+  const envelope = await orgs.getRecoveryEnvelope(orgId);
+  // Handing out the recovery envelope is the first half of break-glass, and the
+  // half an attacker would stop at. It is recorded whether or not it completes.
+  await trail(req, 'org:break_glass_start', 'Org', orgId, { label: await orgs.orgName(orgId) });
+  ok(res, envelope);
 });
 
 export const finishBreakGlass = asyncHandler(async (req: Request, res: Response) => {
   const { orgId, userId } = orgContext(req, 'org:own');
   await orgs.restoreOwnerAccess(orgId, userId, req.body.wrapped_org_dek);
-  await trail(req, 'org:break_glass', 'Org', orgId);
+  await trail(req, 'org:break_glass', 'Org', orgId, { label: await orgs.orgName(orgId) });
   ok(res, { success: true });
 });
 
@@ -174,6 +237,8 @@ function auditFilter(req: Request) {
   const q = req.query as Record<string, unknown>;
   return {
     action: q.action as string | undefined,
+    resource: q.resource as string | undefined,
+    outcome: q.outcome as 'success' | 'failure' | undefined,
     userId: q.user_id as string | undefined,
     from: q.from as Date | undefined,
     to: q.to as Date | undefined,
@@ -187,10 +252,28 @@ export const listAudit = asyncHandler(async (req: Request, res: Response) => {
   ok(res, await audit.listAuditLogs(orgId, auditFilter(req)));
 });
 
+/**
+ * Prove the trail has not been edited. Read-only, and not itself audited — it
+ * changes nothing, and an entry per check would just add noise to the thing
+ * being checked.
+ */
+export const verifyAudit = asyncHandler(async (req: Request, res: Response) => {
+  const { orgId } = orgContext(req, 'audit:read');
+  ok(res, await audit.verifyAuditChain(orgId));
+});
+
 export const exportAudit = asyncHandler(async (req: Request, res: Response) => {
   const { orgId } = orgContext(req, 'audit:read');
-  const page = await audit.listAuditLogs(orgId, { ...auditFilter(req), limit: 5000 });
-  await trail(req, 'audit:export', 'AuditLog');
+  const filter = auditFilter(req);
+  const page = await audit.listAuditLogs(orgId, { ...filter, limit: 5000 });
+  await trail(req, 'audit:export', 'AuditLog', undefined, {
+    context: {
+      rows: page.entries.length,
+      action_filter: filter.action,
+      from: filter.from?.toISOString(),
+      to: filter.to?.toISOString(),
+    },
+  });
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
   res.setHeader('Content-Disposition', 'attachment; filename="cloak-audit.csv"');
   res.send(audit.toCsv(page.entries));

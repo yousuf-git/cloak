@@ -5,6 +5,8 @@ import { config } from '../config/index.js';
 export interface AccessTokenClaims {
   sub: string;
   email: string;
+  /** The refresh-token session this access token was minted from. */
+  sid: string;
 }
 
 export function signAccessToken(claims: AccessTokenClaims): string {

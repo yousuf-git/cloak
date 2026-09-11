@@ -1,4 +1,5 @@
 import { createHmac } from 'node:crypto';
+import type { Request } from 'express';
 import type { Types } from 'mongoose';
 import { User } from '../models/user.model.js';
 import { Org } from '../models/org.model.js';
@@ -183,7 +184,7 @@ export type LoginOutcome =
     }
   | { status: '2fa_required' };
 
-export async function login(email: string, authHash: string): Promise<LoginOutcome> {
+export async function login(email: string, authHash: string, req?: Request): Promise<LoginOutcome> {
   const user = await User.findOne({ email });
   // Constant-ish work even on unknown users: verify against a decoy is skipped
   // for simplicity, but we always return the same generic error below.
@@ -207,7 +208,7 @@ export async function login(email: string, authHash: string): Promise<LoginOutco
     return { status: '2fa_required' };
   }
 
-  const tokens = await issueTokenPair(user._id as Types.ObjectId, user.email);
+  const tokens = await issueTokenPair(user._id as Types.ObjectId, user.email, { req });
   user.last_login_at = new Date();
   await user.save();
   return {
@@ -226,7 +227,11 @@ export interface TwoFactorResult {
   userId: Types.ObjectId;
 }
 
-export async function verifyTwoFactor(email: string, code: string): Promise<TwoFactorResult> {
+export async function verifyTwoFactor(
+  email: string,
+  code: string,
+  req?: Request,
+): Promise<TwoFactorResult> {
   const result = await verifyOtp(email, 'login_2fa', code);
   throwOnOtpFailure(result);
 
@@ -235,7 +240,7 @@ export async function verifyTwoFactor(email: string, code: string): Promise<TwoF
     throw new UnauthorizedError('Invalid email or password');
   }
 
-  const tokens = await issueTokenPair(user._id as Types.ObjectId, user.email);
+  const tokens = await issueTokenPair(user._id as Types.ObjectId, user.email, { req });
   user.last_login_at = new Date();
   await user.save();
   return {
@@ -358,10 +363,15 @@ export interface RecoveryResetResult {
   wrappedDEK: string;
   wrappedIdentitySk?: string;
   userId: Types.ObjectId;
+  /** How many other sign-ins the reset ended, for the audit entry. */
+  endedSessions: number;
 }
 
 /** Step 3: rotate the account to the new master password + fresh envelopes. */
-export async function resetWithRecovery(input: RecoveryResetInput): Promise<RecoveryResetResult> {
+export async function resetWithRecovery(
+  input: RecoveryResetInput,
+  req?: Request,
+): Promise<RecoveryResetResult> {
   let email: string;
   try {
     email = verifyRecoveryToken(input.recoveryToken);
@@ -382,9 +392,9 @@ export async function resetWithRecovery(input: RecoveryResetInput): Promise<Reco
   await user.save();
 
   // Invalidate every existing session — the master key has changed.
-  await revokeAllForUser(user._id as Types.ObjectId);
+  const endedSessions = await revokeAllForUser(user._id as Types.ObjectId, 'password_reset');
 
-  const tokens = await issueTokenPair(user._id as Types.ObjectId, user.email);
+  const tokens = await issueTokenPair(user._id as Types.ObjectId, user.email, { req });
   return {
     tokens,
     wrappedDEK: user.wrappedDEK,
@@ -392,6 +402,7 @@ export async function resetWithRecovery(input: RecoveryResetInput): Promise<Reco
     // it wraps still opens — no re-keying needed here.
     wrappedIdentitySk: user.wrapped_identity_sk,
     userId: user._id as Types.ObjectId,
+    endedSessions,
   };
 }
 

@@ -88,12 +88,17 @@ export async function listInvitations(orgId: Id): Promise<InvitationView[]> {
   }));
 }
 
-export async function revokeInvitation(orgId: Id, invitationId: Id): Promise<void> {
-  const result = await Invitation.updateOne(
+export async function revokeInvitation(
+  orgId: Id,
+  invitationId: Id,
+): Promise<{ email: string; role: Role }> {
+  const invitation = await Invitation.findOneAndUpdate(
     { _id: invitationId, org_id: orgId, status: 'pending' },
     { $set: { status: 'revoked' } },
-  );
-  if (result.matchedCount === 0) throw new NotFoundError('Invitation not found');
+    { new: true },
+  ).lean();
+  if (!invitation) throw new NotFoundError('Invitation not found');
+  return { email: invitation.email, role: invitation.role };
 }
 
 export interface InvitationPeek {

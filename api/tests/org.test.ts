@@ -255,6 +255,89 @@ describe('member removal', () => {
       .expect(200);
     await request(app).get('/api/v1/vault/creds').set(headers).expect(403);
   });
+
+  it('lists what the member could read, so the admin knows what to rotate', async () => {
+    const owner = await createAccount(app, 'owner-offboard@example.com');
+    const member = await createAccount(app, 'leaving@example.com');
+    const headers = await joinOrg(owner, member, 'member');
+
+    const project = await request(app)
+      .post('/api/v1/vault/projects')
+      .set(owner.headers)
+      .send({ name: 'Payments' })
+      .expect(201);
+
+    const cred = await request(app)
+      .post('/api/v1/vault/creds')
+      .set(owner.headers)
+      .send({
+        name: 'Stripe live key',
+        username: 'YQ==',
+        password: 'Y2lwaGVy',
+        project_id: project.body.data._id,
+      })
+      .expect(201);
+
+    await request(app)
+      .post('/api/v1/vault/api-keys')
+      .set(owner.headers)
+      .send({ label: 'Sendgrid', key: 'Y2lwaGVy' })
+      .expect(201);
+
+    // The member edits one of them, which is what "opened" is meant to catch.
+    await request(app)
+      .patch(`/api/v1/vault/creds/${cred.body.data._id}`)
+      .set(headers)
+      .send({ username: 'Yg==' })
+      .expect(200);
+
+    const exposure = await request(app)
+      .get(`/api/v1/orgs/${owner.orgId}/members/${member.userId}/exposure`)
+      .set(owner.headers)
+      .expect(200);
+
+    const body = exposure.body.data;
+    expect(body.member.email).toBe(member.email);
+    expect(body.counts).toMatchObject({ cred: 1, api_key: 1 });
+    expect(body.opened_count).toBe(1);
+
+    const stripe = body.items.find((i: { label: string }) => i.label === 'Stripe live key');
+    expect(stripe).toMatchObject({ kind: 'cred', project: 'Payments', opened: true });
+    // Everything in the org is exposed, opened or not — the member held its key.
+    expect(body.items.map((i: { label: string }) => i.label)).toContain('Sendgrid');
+    // Anything they demonstrably touched sorts first.
+    expect(body.items[0].opened).toBe(true);
+  });
+
+  it('leaves the member signed in and inside their other organizations', async () => {
+    const acme = await createAccount(app, 'owner-acme@example.com');
+    const globex = await createAccount(app, 'owner-globex@example.com');
+    const member = await createAccount(app, 'contractor@example.com');
+
+    const atAcme = await joinOrg(acme, member, 'member');
+    const atGlobex = await joinOrg(globex, member, 'member');
+
+    await request(app)
+      .delete(`/api/v1/orgs/${acme.orgId}/members/${member.userId}`)
+      .set(acme.headers)
+      .expect(200);
+
+    await request(app).get('/api/v1/vault/creds').set(atAcme).expect(403);
+    // Same token, different org: leaving one team is not a sign-out.
+    await request(app).get('/api/v1/vault/creds').set(atGlobex).expect(200);
+    await request(app)
+      .get('/api/v1/me/sessions')
+      .set({ Authorization: `Bearer ${member.token}` })
+      .expect(200)
+      .expect((res) => expect(res.body.data.sessions).toHaveLength(1));
+
+    const orgs = await request(app)
+      .get('/api/v1/orgs')
+      .set({ Authorization: `Bearer ${member.token}` })
+      .expect(200);
+    expect(orgs.body.data.map((o: { id: string }) => o.id)).not.toContain(acme.orgId);
+    expect(orgs.body.data.map((o: { id: string }) => o.id)).toContain(globex.orgId);
+  });
 });
 
 describe('audit', () => {
@@ -287,7 +370,112 @@ describe('audit', () => {
       .set(owner.headers)
       .expect(200);
     expect(csv.headers['content-type']).toContain('text/csv');
-    expect(csv.text.split('\n')[0]).toBe('created_at,action,actor_email,resource,resource_id,ip');
+    expect(csv.text.split('\n')[0]).toBe(
+      'created_at,action,outcome,actor_email,resource,target_label,detail,resource_id,ip',
+    );
+  });
+
+  it('names what was touched, not just its type', async () => {
+    const owner = await createAccount(app, 'owner10@example.com');
+
+    const project = await request(app)
+      .post('/api/v1/vault/projects')
+      .set(owner.headers)
+      .send({ name: 'Billing service' })
+      .expect(201);
+
+    const cred = await request(app)
+      .post('/api/v1/vault/creds')
+      .set(owner.headers)
+      .send({
+        name: 'Stripe dashboard',
+        username: 'YQ==',
+        password: 'Y2lwaGVy',
+        project_id: project.body.data._id,
+      })
+      .expect(201);
+
+    await request(app)
+      .patch(`/api/v1/vault/creds/${cred.body.data._id}`)
+      .set(owner.headers)
+      .send({ password: 'bmV3LWNpcGhlcg==' })
+      .expect(200);
+
+    const page = await request(app)
+      .get(`/api/v1/orgs/${owner.orgId}/audit`)
+      .set(owner.headers)
+      .expect(200);
+
+    const entries: {
+      action: string;
+      target_label?: string;
+      context?: Record<string, unknown>;
+      detail: string;
+    }[] = page.body.data.entries;
+
+    const update = entries.find((e) => e.action === 'cred:update');
+    expect(update?.target_label).toBe('Stripe dashboard');
+    expect(update?.context?.fields).toEqual(['password']);
+    expect(update?.context?.project).toBe('Billing service');
+    expect(update?.detail).toContain('project=Billing service');
+
+    // The value itself must never reach the trail.
+    expect(JSON.stringify(entries)).not.toContain('bmV3LWNpcGhlcg==');
+  });
+
+  it('records which env file was read, and which variables an edit changed', async () => {
+    const owner = await createAccount(app, 'owner11@example.com');
+    const project = await request(app)
+      .post('/api/v1/vault/projects')
+      .set(owner.headers)
+      .send({ name: 'API' })
+      .expect(201);
+
+    const before = Buffer.from('DB_URL="encrypted:aaa"\nOLD_KEY="encrypted:bbb"\n').toString('base64');
+    const after = Buffer.from('DB_URL="encrypted:zzz"\nNEW_KEY="encrypted:ccc"\n').toString('base64');
+
+    const file = await request(app)
+      .post('/api/v1/vault/env-files')
+      .set(owner.headers)
+      .send({
+        project_id: project.body.data._id,
+        label: '.env.production',
+        tag: 'Production',
+        encrypted_dotenvx_key: 'ZW5jcnlwdGVkLWtleQ==',
+        content_b64: before,
+        variable_count: 2,
+      })
+      .expect(201);
+
+    const id = file.body.data._id;
+    await request(app).get(`/api/v1/vault/env-files/${id}/raw`).set(owner.headers).expect(200);
+    await request(app)
+      .patch(`/api/v1/vault/env-files/${id}`)
+      .set(owner.headers)
+      .send({ content_b64: after, variable_count: 2 })
+      .expect(200);
+
+    const page = await request(app)
+      .get(`/api/v1/orgs/${owner.orgId}/audit`)
+      .set(owner.headers)
+      .expect(200);
+    const entries: {
+      action: string;
+      target_label?: string;
+      context?: Record<string, string[] | string | number>;
+    }[] = page.body.data.entries;
+
+    const viewed = entries.find((e) => e.action === 'env:view');
+    expect(viewed?.target_label).toBe('.env.production');
+    expect(viewed?.context?.project).toBe('API');
+    expect(viewed?.context?.tag).toBe('Production');
+
+    const edited = entries.find((e) => e.action === 'env:update');
+    expect(edited?.context?.added).toEqual(['NEW_KEY']);
+    expect(edited?.context?.removed).toEqual(['OLD_KEY']);
+    expect(edited?.context?.updated).toEqual(['DB_URL']);
+    // Names travel; the ciphertext they point at does not.
+    expect(JSON.stringify(edited)).not.toContain('encrypted:');
   });
 });
 

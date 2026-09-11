@@ -18,6 +18,8 @@ import {
   recoveryStartSchema,
   recoveryVerifySchema,
   recoveryResetSchema,
+  sessionParamSchema,
+  securityLogQuerySchema,
 } from '../validators/auth.validators.js';
 import * as auth from '../controllers/auth.controller.js';
 
@@ -52,5 +54,12 @@ meRouter.use(requireAuth);
 meRouter.get('/', auth.getMe);
 meRouter.patch('/', validate({ body: updateProfileSchema }), auth.updateMe);
 meRouter.post('/2fa', validate({ body: setTwoFactorSchema }), auth.setTwoFactor);
+
+// Signed-in devices. Revoking one ends its refresh chain immediately; its
+// access token still works until it expires (ACCESS_TOKEN_TTL, 15m by default).
+meRouter.get('/sessions', auth.listSessions);
+meRouter.post('/sessions/revoke-others', auth.revokeOtherSessions);
+meRouter.delete('/sessions/:sessionId', validate({ params: sessionParamSchema }), auth.revokeSession);
+meRouter.get('/security-log', validate({ query: securityLogQuerySchema }), auth.securityLog);
 // Publishing an identity public key is a prerequisite for joining any org.
 meRouter.post('/identity', validate({ body: identitySchema }), org.publishIdentity);

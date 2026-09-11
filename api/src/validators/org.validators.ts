@@ -45,6 +45,8 @@ export const memberListQuerySchema = z.object({
 
 export const auditQuerySchema = z.object({
   action: z.string().trim().max(64).optional(),
+  resource: z.string().trim().max(32).optional(),
+  outcome: z.enum(['success', 'failure']).optional(),
   user_id: objectId.optional(),
   from: z.coerce.date().optional(),
   to: z.coerce.date().optional(),

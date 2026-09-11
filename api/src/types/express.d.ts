@@ -7,6 +7,8 @@ declare global {
       user?: {
         sub: string;
         email: string;
+        /** Session this token belongs to; absent on tokens minted before sessions. */
+        sid?: string;
       };
       /** Set by requireOrg: the org this request acts on, and the caller's role in it. */
       org?: {
