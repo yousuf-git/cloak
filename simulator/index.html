@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Under the Cloak</title>
+<meta name="description" content="How the keys, locks and custody in Cloak actually work — an interactive map of its architecture, flows, roles, events and known weak points.">
+
+<link rel="icon" type="image/png" href="assets/cloak-mono-light.png">
+<link rel="apple-touch-icon" href="assets/cloak-mono-light.png">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@85..125,400..700&family=JetBrains+Mono:wght@400;500&display=swap">
+
+<!--
+  Tailwind's play CDN gives utility classes to anyone extending this page.
+  The visual system itself lives in assets/app.css, so the page stays readable
+  if the CDN is unreachable (offline, locked-down network) rather than
+  collapsing into unstyled markup.
+-->
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  if (window.tailwind) {
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            ink: '#0E1116',
+            'ink-2': '#141922',
+            'ink-3': '#1B212C',
+            steel: '#29323F',
+            'steel-lit': '#3B4757',
+            brass: '#C9A227',
+            'brass-lit': '#E8C65A',
+            verdigris: '#4FB3A5',
+            rust: '#C05B4D',
+            paper: '#E8E6E1',
+            'paper-dim': '#99A1B0',
+          },
+          fontFamily: {
+            sans: ['Archivo', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'ui-monospace', 'monospace'],
+          },
+        },
+      },
+    };
+  }
+</script>
+
+<link rel="stylesheet" href="assets/app.css">
+</head>
+
+<body>
+<div class="shell" id="shell" data-nav="closed">
+
+  <header class="rail">
+    <button class="pbtn nav-toggle" id="nav-toggle" aria-label="Toggle navigation"
+            style="padding:6px 10px">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+        <path d="M4 7h16M4 12h16M4 17h16"></path>
+      </svg>
+    </button>
+
+    <a class="brand" href="#/map">
+      <img class="brand-logo" src="assets/cloak-mono-light.png" alt="" width="24" height="24">
+      <span class="brand-mark">Under the Cloak</span>
+      <span class="brand-sub">how the keys and locks actually work</span>
+    </a>
+
+    <span class="rail-spacer"></span>
+
+    <button class="pbtn" id="palette-open" style="padding:5px 11px">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+        <circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path>
+      </svg>
+      <span>Search</span>
+      <span class="kbd" style="margin-left:4px">&#8984;K</span>
+    </button>
+
+    <span class="rail-note" style="margin-left:4px">
+      traced to <span class="mono" style="color:var(--verdigris)">docs/INFO_ABOUT_KEYS.md</span>
+    </span>
+  </header>
+
+  <nav class="nav" id="nav" aria-label="Sections"></nav>
+
+  <div class="main" id="main" data-inspector="closed">
+    <main class="stage" id="stage" tabindex="-1"></main>
+    <aside class="inspector" id="inspector" aria-label="Details"></aside>
+  </div>
+
+</div>
+
+<div class="palette-backdrop" id="palette-backdrop" hidden>
+  <div class="palette" role="dialog" aria-modal="true" aria-label="Search this page">
+    <input class="palette-input" id="palette-input" type="text" autocomplete="off" spellcheck="false"
+           placeholder="Search keys, flows, fields, events, risks&hellip;">
+    <div class="palette-results" id="palette-results"></div>
+  </div>
+</div>
+
+<!-- Load order matters: data, then helpers, then views, then the shell. -->
+<script src="js/data-core.js"></script>
+<script src="js/data-flows.js"></script>
+<script src="js/data-terms.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/views/map.js"></script>
+<script src="js/views/keys.js"></script>
+<script src="js/views/flows.js"></script>
+<script src="js/views/custody.js"></script>
+<script src="js/views/roles.js"></script>
+<script src="js/views/events.js"></script>
+<script src="js/views/risks.js"></script>
+<script src="js/views/catalogue.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
