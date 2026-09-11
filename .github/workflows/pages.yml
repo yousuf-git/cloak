@@ -1,0 +1,43 @@
+name: pages
+
+# Publishes simulator/ to GitHub Pages at under.cloak.commit4solutions.com.
+#
+# The page has no build step — it is plain HTML, CSS and classic scripts, and is
+# meant to keep working from a file:// URL. So this uploads the directory as it
+# sits in the repo; anything that would need compiling does not belong in it.
+#
+# Pages cannot serve an arbitrary subdirectory from a branch (only / or /docs),
+# which is why this is a workflow rather than a setting.
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'simulator/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+# One deployment at a time, and never cancel one midway: a half-finished
+# deployment would leave the live site on the previous commit with no signal.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write # deploy-pages authenticates with OIDC, not a token
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: simulator
+      - id: deploy
+        uses: actions/deploy-pages@v4
