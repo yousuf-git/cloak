@@ -5,22 +5,28 @@ use zeroize::Zeroizing;
 
 use super::error::{CryptoError, CryptoResult};
 
-const MASTER_KEY_AD: &[u8] = b"cloak:mk";
-const AUTH_HASH_AD: &[u8] = b"cloak:auth";
-const RECOVERY_KEY_AD: &[u8] = b"cloak:rk";
+const MASTER_KEY_DOMAIN: &[u8] = b"cloak:mk";
+const AUTH_HASH_DOMAIN: &[u8] = b"cloak:auth";
+const RECOVERY_KEY_DOMAIN: &[u8] = b"cloak:rk";
 const KDF_OUTPUT_LEN: usize = 32;
 
 // Crockford base32 (no I, L, O, U) — unambiguous for humans transcribing keys.
 const CROCKFORD: &[u8; 32] = b"0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 
 /// Argon2id params tuned for desktop (moderate cost; adjustable later).
-fn argon2() -> CryptoResult<Argon2<'static>> {
+///
+/// `domain` is passed as Argon2's secret input, so each domain is a distinct
+/// keyed hash. It must enter the KDF rather than being mixed into its output:
+/// post-hoc mixing leaves every domain a known function of every other, which
+/// would let anyone holding the authHash reconstruct the Master Key.
+fn argon2(domain: &'static [u8]) -> CryptoResult<Argon2<'static>> {
   let params = Params::new(19_456, 2, 1, Some(KDF_OUTPUT_LEN))
     .map_err(|e| CryptoError::Argon2(e.to_string()))?;
-  Ok(Argon2::new(Algorithm::Argon2id, Version::V0x13, params))
+  Argon2::new_with_secret(domain, Algorithm::Argon2id, Version::V0x13, params)
+    .map_err(|e| CryptoError::Argon2(e.to_string()))
 }
 
-fn derive(password: &str, salt_b64: &str, associated_data: &[u8]) -> CryptoResult<Zeroizing<[u8; 32]>> {
+fn derive(password: &str, salt_b64: &str, domain: &'static [u8]) -> CryptoResult<Zeroizing<[u8; 32]>> {
   let salt = B64.decode(salt_b64).map_err(|e| CryptoError::InvalidInput(e.to_string()))?;
   if salt.len() < 16 {
     return Err(CryptoError::InvalidInput(
@@ -29,25 +35,19 @@ fn derive(password: &str, salt_b64: &str, associated_data: &[u8]) -> CryptoResul
   }
 
   let mut out = Zeroizing::new([0u8; 32]);
-  let argon2 = argon2()?;
-  argon2
+  argon2(domain)?
     .hash_password_into(password.as_bytes(), &salt, &mut *out)
     .map_err(|e| CryptoError::Argon2(e.to_string()))?;
-
-  // Domain separation via associated-data mixing (plan: ad="cloak:mk" / "cloak:auth").
-  for (byte, ad_byte) in out.iter_mut().zip(associated_data.iter().cycle()) {
-    *byte ^= ad_byte;
-  }
 
   Ok(out)
 }
 
 pub fn derive_master_key(password: &str, crypto_salt_b64: &str) -> CryptoResult<Zeroizing<[u8; 32]>> {
-  derive(password, crypto_salt_b64, MASTER_KEY_AD)
+  derive(password, crypto_salt_b64, MASTER_KEY_DOMAIN)
 }
 
 pub fn derive_auth_hash(password: &str, crypto_salt_b64: &str) -> CryptoResult<Zeroizing<[u8; 32]>> {
-  derive(password, crypto_salt_b64, AUTH_HASH_AD)
+  derive(password, crypto_salt_b64, AUTH_HASH_DOMAIN)
 }
 
 pub fn auth_hash_b64(password: &str, crypto_salt_b64: &str) -> CryptoResult<String> {
@@ -62,7 +62,7 @@ pub fn generate_crypto_salt_b64() -> String {
 }
 
 /// Derive the recovery wrapping key from the (normalized) recovery key. Uses a
-/// distinct associated-data domain so it can never collide with the MasterKey.
+/// distinct KDF domain so it can never collide with the MasterKey.
 pub fn derive_recovery_wrapping_key(
   recovery_key: &str,
   crypto_salt_b64: &str,
@@ -71,7 +71,7 @@ pub fn derive_recovery_wrapping_key(
   if normalized.is_empty() {
     return Err(CryptoError::InvalidInput("recovery key is empty".into()));
   }
-  derive(&normalized, crypto_salt_b64, RECOVERY_KEY_AD)
+  derive(&normalized, crypto_salt_b64, RECOVERY_KEY_DOMAIN)
 }
 
 /// Canonicalize user-typed recovery keys: uppercase, strip separators, and map
@@ -129,6 +129,38 @@ mod tests {
     let mk = derive_master_key("test-password", &salt).unwrap();
     let ah = derive_auth_hash("test-password", &salt).unwrap();
     assert_ne!(*mk, *ah);
+  }
+
+  /// The authHash reaches the server on every login. If the domains were only
+  /// mixed into the KDF's output, `MasterKey XOR authHash` would be the same
+  /// constant for every account, and holding the authHash would hand over the
+  /// Master Key. Two different passwords must produce two different deltas.
+  #[test]
+  fn master_key_is_not_recoverable_from_auth_hash() {
+    let salt = generate_crypto_salt_b64();
+
+    let delta = |password: &str| {
+      let mk = derive_master_key(password, &salt).unwrap();
+      let ah = derive_auth_hash(password, &salt).unwrap();
+      let mut d = [0u8; 32];
+      for i in 0..32 {
+        d[i] = mk[i] ^ ah[i];
+      }
+      d
+    };
+
+    assert_ne!(delta("password-one"), delta("password-two"));
+  }
+
+  /// Every domain must be independent, not just the two used at login.
+  #[test]
+  fn all_three_domains_diverge() {
+    let salt = generate_crypto_salt_b64();
+    let mk = derive_master_key("shared-secret", &salt).unwrap();
+    let ah = derive_auth_hash("shared-secret", &salt).unwrap();
+    let rk = derive_recovery_wrapping_key("shared-secret", &salt).unwrap();
+    assert_ne!(*mk, *rk);
+    assert_ne!(*ah, *rk);
   }
 
   #[test]

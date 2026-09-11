@@ -20,7 +20,11 @@ pub fn generate_identity_keypair() -> IdentityKeypair {
   let secret = SecretKey::generate(&mut rand::thread_rng());
   let public = secret.public_key();
   IdentityKeypair {
+    // `as_bytes()` borrows the public key's internal bytes; Base64 encoding
+    // only needs this temporary borrowed data.
     public_key_b64: B64.encode(public.as_bytes()),
+    // The secret key needs owned storage, wrapped in `Zeroizing` so it is
+    // cleared from memory when dropped.
     secret_key: Zeroizing::new(secret.to_bytes()),
   }
 }
