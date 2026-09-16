@@ -157,7 +157,7 @@ export function useSshKeys() {
       items: sb.sshKeys,
       isLoading: false,
       create: async (b: Partial<SshKeyDto>) => sb.addSshKey(b),
-      update: async (id: string, b: { title?: string; comment?: string; note?: string }) =>
+      update: async (id: string, b: { title?: string; comment?: string; note?: string; project_id?: string | null }) =>
         sb.updateSshKey(id, b),
       remove: async (id: string) => sb.removeSshKey(id),
     };
@@ -170,7 +170,7 @@ export function useSshKeys() {
       await vaultApi.createSshKey(b);
       await invalidate();
     },
-    update: async (id: string, b: { title?: string; comment?: string; note?: string }) => {
+    update: async (id: string, b: { title?: string; comment?: string; note?: string; project_id?: string | null }) => {
       await vaultApi.updateSshKey(id, b);
       await invalidate();
     },

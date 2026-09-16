@@ -101,26 +101,75 @@ export interface ImportRow {
   username: string;
   password: string;
   note: string;
+  /** Empty for a standalone credential. */
+  project_id: string;
+}
+
+/** An import row, with where it came from so the import log can point back at it. */
+export interface SourcedRow extends ImportRow {
+  /** Line in the file, counting the header as line 1. */
+  line: number;
+}
+
+/**
+ * The header Cloak's own export writes for the project column.
+ *
+ * Deliberately not auto-mapped from synonyms or offered in the column picker: a
+ * project id only means something to the organization that exported it, so the
+ * column is only trusted in a file that came out of Cloak.
+ */
+export const PROJECT_HEADER = 'project_id';
+
+export function projectColumn(headers: string[]): number | null {
+  const idx = headers.findIndex((h) => h.trim().toLowerCase() === PROJECT_HEADER);
+  return idx === -1 ? null : idx;
 }
 
 /** Project the parsed rows through a column mapping into typed import rows. */
-export function toImportRows(parsed: ParsedCsv, mapping: ColumnMapping): ImportRow[] {
+export function toImportRows(parsed: ParsedCsv, mapping: ColumnMapping): SourcedRow[] {
   const cell = (row: string[], idx: number | null) =>
     idx === null ? '' : (row[idx] ?? '').trim();
+  const project = projectColumn(parsed.headers);
   return parsed.rows
-    .map((row) => ({
+    .map((row, i) => ({
       name: cell(row, mapping.name),
       url: cell(row, mapping.url),
       username: cell(row, mapping.username),
       password: cell(row, mapping.password),
       note: cell(row, mapping.note),
+      project_id: cell(row, project),
+      line: i + 2,
     }))
     // A row is worth importing only if it carries a password or a name.
     .filter((r) => r.password || r.name);
 }
 
 /** A row must have a name (falls back to url/username) and a password to import. */
-export function normalizeRow(r: ImportRow): ImportRow {
+export function normalizeRow<T extends ImportRow>(r: T): T {
   const name = r.name || r.url || r.username || 'Untitled';
   return { ...r, name };
+}
+
+const OBJECT_ID = /^[a-f\d]{24}$/i;
+
+/** What a row's project cell resolves to in the organization being imported into. */
+export type ProjectLink =
+  | { kind: 'none' }
+  | { kind: 'linked'; projectId: string; projectName: string }
+  /** Shaped like a project id, but no project in this organization has it. */
+  | { kind: 'unknown'; value: string }
+  /** Not a project id at all. */
+  | { kind: 'invalid'; value: string };
+
+export function resolveProject(
+  value: string,
+  projects: { _id: string; name: string }[],
+): ProjectLink {
+  const trimmed = value.trim();
+  if (!trimmed) return { kind: 'none' };
+  if (!OBJECT_ID.test(trimmed)) return { kind: 'invalid', value: trimmed };
+  const project = projects.find((p) => p._id.toLowerCase() === trimmed.toLowerCase());
+  return project
+    ? { kind: 'linked', projectId: project._id, projectName: project.name }
+    : { kind: 'unknown', value: trimmed };
 }

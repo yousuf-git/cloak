@@ -617,7 +617,8 @@ export interface CredDto {
   username: string;
   password: string;
   note?: string;
-  project_id?: string;
+  /** Absent for a standalone item; null in an update detaches it. */
+  project_id?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -628,7 +629,8 @@ export interface ApiKeyDto {
   url?: string;
   key: string;
   note?: string;
-  project_id?: string;
+  /** Absent for a standalone item; null in an update detaches it. */
+  project_id?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -639,7 +641,8 @@ export interface AccessKeyDto {
   access_key_id: string; // plaintext — searchable
   secret_access_key: string; // ciphertext
   note?: string;
-  project_id?: string;
+  /** Absent for a standalone item; null in an update detaches it. */
+  project_id?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -655,7 +658,8 @@ export interface SshKeyDto {
   comment?: string;
   private_key: string; // ciphertext
   note?: string;
-  project_id?: string;
+  /** Absent for a standalone item; null in an update detaches it. */
+  project_id?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -711,7 +715,10 @@ export const vaultApi = {
   listSshKeys: () => apiRequest<SshKeyDto[]>('/vault/ssh-keys', { auth: true, org: true }),
   createSshKey: (body: Partial<SshKeyDto>) =>
     apiRequest<SshKeyDto>('/vault/ssh-keys', { method: 'POST', body, auth: true, org: true }),
-  updateSshKey: (id: string, body: { title?: string; comment?: string; note?: string }) =>
+  updateSshKey: (
+    id: string,
+    body: { title?: string; comment?: string; note?: string; project_id?: string | null },
+  ) =>
     apiRequest<SshKeyDto>(`/vault/ssh-keys/${id}`, { method: 'PATCH', body, auth: true, org: true }),
   deleteSshKey: (id: string) =>
     apiRequest<{ success: boolean }>(`/vault/ssh-keys/${id}`, { method: 'DELETE', auth: true, org: true }),
@@ -779,6 +786,7 @@ export type EnvTag = 'Local' | 'Staging' | 'Production' | 'Custom';
 
 export interface EnvFileDto {
   _id: string;
+      project_id?: string;
   project_id: string;
   label: string;
   tag: EnvTag;

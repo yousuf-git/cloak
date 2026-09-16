@@ -33,6 +33,17 @@ async function assertProjectInOrg(orgId: Id, data: Record<string, unknown>): Pro
   if (!exists) throw new ValidationError('Unknown project for this organization');
 }
 
+/**
+ * An update document, with `project_id: null` turned into an unset. A detached
+ * item then looks exactly like one that was never linked, rather than carrying
+ * a null the list views have to treat as a second kind of "no project".
+ */
+function linkUpdate(data: Record<string, unknown>) {
+  if (data.project_id !== null) return { $set: data };
+  const { project_id: _detached, ...rest } = data;
+  return { $set: rest, $unset: { project_id: 1 } };
+}
+
 // ---------- Credentials ----------
 export function listCreds({ orgId }: Scope) {
   return Cred.find({ org_id: orgId }).sort({ created_at: -1 }).lean();
@@ -45,7 +56,7 @@ export async function createCred({ orgId, userId }: Scope, data: Record<string, 
 
 export async function updateCred({ orgId }: Scope, id: string, data: Record<string, unknown>) {
   await assertProjectInOrg(orgId, data);
-  const doc = await Cred.findOneAndUpdate({ _id: id, org_id: orgId }, { $set: data }, { new: true });
+  const doc = await Cred.findOneAndUpdate({ _id: id, org_id: orgId }, linkUpdate(data), { new: true });
   if (!doc) throw new NotFoundError('Credential not found');
   return doc;
 }
@@ -68,7 +79,7 @@ export async function createApiKey({ orgId, userId }: Scope, data: Record<string
 
 export async function updateApiKey({ orgId }: Scope, id: string, data: Record<string, unknown>) {
   await assertProjectInOrg(orgId, data);
-  const doc = await ApiKey.findOneAndUpdate({ _id: id, org_id: orgId }, { $set: data }, { new: true });
+  const doc = await ApiKey.findOneAndUpdate({ _id: id, org_id: orgId }, linkUpdate(data), { new: true });
   if (!doc) throw new NotFoundError('API key not found');
   return doc;
 }
@@ -91,7 +102,7 @@ export async function createAccessKey({ orgId, userId }: Scope, data: Record<str
 
 export async function updateAccessKey({ orgId }: Scope, id: string, data: Record<string, unknown>) {
   await assertProjectInOrg(orgId, data);
-  const doc = await AccessKey.findOneAndUpdate({ _id: id, org_id: orgId }, { $set: data }, { new: true });
+  const doc = await AccessKey.findOneAndUpdate({ _id: id, org_id: orgId }, linkUpdate(data), { new: true });
   if (!doc) throw new NotFoundError('Access key not found');
   return doc;
 }
@@ -114,7 +125,7 @@ export async function createSshKey({ orgId, userId }: Scope, data: Record<string
 
 export async function updateSshKey({ orgId }: Scope, id: string, data: Record<string, unknown>) {
   await assertProjectInOrg(orgId, data);
-  const doc = await SshKey.findOneAndUpdate({ _id: id, org_id: orgId }, { $set: data }, { new: true });
+  const doc = await SshKey.findOneAndUpdate({ _id: id, org_id: orgId }, linkUpdate(data), { new: true });
   if (!doc) throw new NotFoundError('SSH key not found');
   return doc;
 }
@@ -137,7 +148,7 @@ export async function createPlatform({ orgId, userId }: Scope, data: Record<stri
 
 export async function updatePlatform({ orgId }: Scope, id: string, data: Record<string, unknown>) {
   await assertProjectInOrg(orgId, data);
-  const doc = await Platform.findOneAndUpdate({ _id: id, org_id: orgId }, { $set: data }, { new: true });
+  const doc = await Platform.findOneAndUpdate({ _id: id, org_id: orgId }, linkUpdate(data), { new: true });
   if (!doc) throw new NotFoundError('Platform not found');
   return doc;
 }
@@ -203,8 +214,21 @@ export async function updateProject({ orgId }: Scope, id: string, data: Record<s
   return doc;
 }
 
+/**
+ * Delete a project. Items that could stand alone are detached from it rather
+ * than left pointing at a project that no longer exists; they stay in the vault.
+ */
 export async function deleteProject({ orgId }: Scope, id: string) {
   const doc = await Project.findOneAndDelete({ _id: id, org_id: orgId }).lean();
   if (!doc) throw new NotFoundError('Project not found');
+  const linked = { org_id: orgId, project_id: doc._id };
+  const detach = { $unset: { project_id: 1 } };
+  await Promise.all([
+    Cred.updateMany(linked, detach),
+    ApiKey.updateMany(linked, detach),
+    AccessKey.updateMany(linked, detach),
+    SshKey.updateMany(linked, detach),
+    Platform.updateMany(linked, detach),
+  ]);
   return doc;
 }

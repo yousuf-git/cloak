@@ -291,7 +291,7 @@ export const getEnvRaw = asyncHandler(async (req: Request, res: Response) => {
   ok(res, { content: doc.content });
 });
 export const updateEnvFile = asyncHandler(async (req: Request, res: Response) => {
-  const { file, changes, renamedFrom } = await envFiles.updateEnvFile(
+  const { file, changes, renamedFrom, movedFrom } = await envFiles.updateEnvFile(
     scope(req, 'vault:write'),
     param(req, 'id'),
     req.body,
@@ -301,6 +301,8 @@ export const updateEnvFile = asyncHandler(async (req: Request, res: Response) =>
     context: {
       tag: file.tag,
       renamed_from: renamedFrom,
+      // The previous project may be gone — that is often why a file is moved.
+      moved_from: movedFrom ? ((await projectOf(req, movedFrom)).project ?? 'a deleted project') : undefined,
       added: changes?.added,
       removed: changes?.removed,
       updated: changes?.updated,

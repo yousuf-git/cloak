@@ -55,7 +55,7 @@ interface SandboxState {
   removeAccessKey: (id: string) => void;
 
   addSshKey: (k: Partial<SshKeyDto>) => void;
-  updateSshKey: (id: string, k: { title?: string; comment?: string; note?: string }) => void;
+  updateSshKey: (id: string, k: { title?: string; comment?: string; note?: string; project_id?: string | null }) => void;
   removeSshKey: (id: string) => void;
 
   addPlatform: (name: string, note: string | undefined, codes: string[]) => void;
@@ -76,6 +76,7 @@ interface SandboxState {
     hasKey: boolean;
   }) => void;
   updateEnvFile: (id: string, plain: string) => void;
+  moveEnvFile: (id: string, projectId: string) => void;
   removeEnvFile: (id: string) => void;
 }
 
@@ -182,6 +183,7 @@ export const useSandboxData = create<SandboxState>((set) => ({
           username: c.username ?? '',
           password: c.password ?? '',
           note: c.note,
+          project_id: c.project_id ?? undefined,
           created_at: now(),
           updated_at: now(),
         },
@@ -201,6 +203,7 @@ export const useSandboxData = create<SandboxState>((set) => ({
           url: k.url,
           key: k.key ?? '',
           note: k.note,
+          project_id: k.project_id ?? undefined,
           created_at: now(),
           updated_at: now(),
         },
@@ -220,6 +223,7 @@ export const useSandboxData = create<SandboxState>((set) => ({
           access_key_id: k.access_key_id ?? '',
           secret_access_key: k.secret_access_key ?? '',
           note: k.note,
+          project_id: k.project_id ?? undefined,
           created_at: now(),
           updated_at: now(),
         },
@@ -243,6 +247,7 @@ export const useSandboxData = create<SandboxState>((set) => ({
           comment: k.comment,
           private_key: k.private_key ?? '',
           note: k.note,
+          project_id: k.project_id ?? undefined,
           created_at: now(),
           updated_at: now(),
         },
@@ -309,6 +314,11 @@ export const useSandboxData = create<SandboxState>((set) => ({
     set((s) => ({
       projects: s.projects.filter((x) => x._id !== id),
       envFiles: s.envFiles.filter((e) => e.project_id !== id),
+      // Matches the server: standalone-capable items are detached, not deleted.
+      creds: s.creds.map((x) => (x.project_id === id ? { ...x, project_id: undefined } : x)),
+      apiKeys: s.apiKeys.map((x) => (x.project_id === id ? { ...x, project_id: undefined } : x)),
+      accessKeys: s.accessKeys.map((x) => (x.project_id === id ? { ...x, project_id: undefined } : x)),
+      sshKeys: s.sshKeys.map((x) => (x.project_id === id ? { ...x, project_id: undefined } : x)),
     })),
 
   envFiles: seedEnvFiles,
@@ -345,6 +355,10 @@ export const useSandboxData = create<SandboxState>((set) => ({
             }
           : e,
       ),
+    })),
+  moveEnvFile: (id, projectId) =>
+    set((s) => ({
+      envFiles: s.envFiles.map((e) => (e._id === id ? { ...e, project_id: projectId, updated_at: now() } : e)),
     })),
   removeEnvFile: (id) => set((s) => ({ envFiles: s.envFiles.filter((e) => e._id !== id) })),
 }));

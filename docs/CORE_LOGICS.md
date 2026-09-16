@@ -103,7 +103,7 @@ KEY=value   ──encrypt_env_value(pubkey)──►   KEY="encrypted:BAllx3…Q
 ## 3. Flow A — Signup (input → keys → DB)
 
 **Trigger:** user submits email + master password on the signup form; store action
-[`auth.ts:101`](../desktop/src/stores/auth.ts#L101).
+[`auth.ts:102`](../desktop/src/stores/auth.ts#L102).
 
 ### Step-by-step
 
@@ -125,7 +125,7 @@ KEY=value   ──encrypt_env_value(pubkey)──►   KEY="encrypted:BAllx3…Q
    `User.create({...})` ([`user.model.ts`](../api/src/models/user.model.ts)). Sends an email-verify OTP.
 
 4. **Client shows the recovery key once**, then wipes it from memory
-   ([`auth.ts:124`](../desktop/src/stores/auth.ts#L124)).
+   ([`auth.ts:125`](../desktop/src/stores/auth.ts#L125)).
 
 ### The KDF (Key Derivation Function), precisely
 
@@ -173,7 +173,7 @@ The password and both raw keys (MasterKey, DEK) **never appear** in the request 
 ## 4. Flow B — Login + 2FA + session unlock
 
 **Model:** *client derives, server verifies.* The KDF runs on-device; only the server decides
-pass/fail. Store action [`auth.ts:254`](../desktop/src/stores/auth.ts#L254).
+pass/fail. Store action [`auth.ts:263`](../desktop/src/stores/auth.ts#L263).
 
 1. **Prelogin (salt only)** — [`api.prelogin`](../desktop/src/lib/api.ts#L122) → `POST /auth/prelogin`
    → [`auth.service.ts:162`](../api/src/services/auth.service.ts#L162) returns
@@ -242,7 +242,7 @@ Two consequences worth spelling out:
 On mount, [`useCreds`](../desktop/src/hooks/vault.ts#L14) runs a TanStack Query (key `['creds']`,
 disabled in sandbox mode) → `GET /api/v1/vault/creds` →
 [`listCreds` controller](../api/src/controllers/vault.controller.ts#L39) →
-[`Cred.find({ org_id }).sort({ created_at: -1 }).lean()`](../api/src/services/vault.service.ts#L37).
+[`Cred.find({ org_id }).sort({ created_at: -1 }).lean()`](../api/src/services/vault.service.ts#L48).
 
 The query is **scoped to `org_id`**, resolved per request from the caller's membership
 ([`require-org.ts:16`](../api/src/middlewares/require-org.ts#L16)) rather than taken from the
@@ -254,7 +254,7 @@ no key that *could* open it.
 ### 5.2 Render masked
 
 Each row renders the password through [`SecretField`](../desktop/src/components/ui/SecretField.tsx#L135),
-wired at [`CredentialsPage.tsx:140`](../desktop/src/pages/CredentialsPage.tsx#L140):
+wired at [`CredentialsPage.tsx:162`](../desktop/src/pages/CredentialsPage.tsx#L162):
 
 ```tsx
 <SecretField cipher={cred.password} reveal={() => decrypt(cred.password)} maskLength={20} />
@@ -350,7 +350,7 @@ Key facts about this path:
   plaintext survives until unmount, so re-revealing is instant; unmounting (navigation, list
   refresh) drops it.
 - **Edit** re-decrypts to prefill the form
-  ([`CredentialsPage.tsx:242`](../desktop/src/pages/CredentialsPage.tsx#L242)), then re-encrypts on
+  ([`CredentialsPage.tsx:268`](../desktop/src/pages/CredentialsPage.tsx#L268)), then re-encrypts on
   save through the Flow D pipeline (§6) — `seal` draws a **fresh random nonce**, so the stored ciphertext
   changes even when the password didn't. Observing ciphertext change is *not* evidence the secret
   changed.
@@ -366,7 +366,7 @@ Key facts about this path:
 
 This is the "when a user inputs, what happens until it's stored" walkthrough.
 
-**UI:** the New Credential modal ([`CredentialsPage.tsx:217`](../desktop/src/pages/CredentialsPage.tsx#L217)).
+**UI:** the New Credential modal ([`CredentialsPage.tsx:242`](../desktop/src/pages/CredentialsPage.tsx#L242)).
 User types `name`, `url`, `username`, `password`, `note` and clicks Create.
 
 ### The pipeline
@@ -410,7 +410,7 @@ User types `name`, `url`, `username`, `password`, `note` and clicks Create.
 - **Tenant scoping is server-enforced.** The client never sends `org_id` or `created_by` in the body;
   the controller derives both — the org from the caller's membership, the actor from the verified JWT
   ([`vault.controller.ts:15`](../api/src/controllers/vault.controller.ts#L15)) — and the service
-  stamps them onto the document ([`vault.service.ts:41`](../api/src/services/vault.service.ts#L41)).
+  stamps them onto the document ([`vault.service.ts:52`](../api/src/services/vault.service.ts#L52)).
 - **The server stores ciphertext blindly.** `password` is a `required: true` `String`
   ([`cred.model.ts:24`](../api/src/models/cred.model.ts#L24)) — the API has no key and cannot read it.
 - **An audit-log row is written** — action `cred:create`, **metadata only**, never the value
@@ -436,10 +436,10 @@ User types `name`, `url`, `username`, `password`, `note` and clicks Create.
 
 > **API keys, backup codes** follow the identical pattern: `key` / `encrypted_code` are encrypted with
 > the same `crypto_encrypt_field`; `label` and platform `name` stay plaintext. See
-> [`vault.service.ts:64`](../api/src/services/vault.service.ts#L64) (API keys) and
-> [`:151`](../api/src/services/vault.service.ts#L151) (backup codes). Projects are their own
+> [`vault.service.ts:75`](../api/src/services/vault.service.ts#L75) (API keys) and
+> [`:162`](../api/src/services/vault.service.ts#L162) (backup codes). Projects are their own
 > org-scoped collection and fully plaintext — they are filing labels, not secrets
-> ([`vault.service.ts:196`](../api/src/services/vault.service.ts#L196)).
+> ([`vault.service.ts:207`](../api/src/services/vault.service.ts#L207)).
 
 ---
 
@@ -451,7 +451,7 @@ DB — see [`INITIAL_PLAN.md` §1](plans/INITIAL_PLAN.md)).
 
 ### 7.1 Import a plaintext `.env` (create)
 
-Orchestrated by [`useEnvFiles.importPlain`](../desktop/src/hooks/useEnvFiles.ts#L63).
+Orchestrated by [`useEnvFiles.importPlain`](../desktop/src/hooks/useEnvFiles.ts#L64).
 
 1. `crypto.envEncryptNew(plaintext)` → [`crypto_env_encrypt_new`](../desktop/src-tauri/src/commands/crypto.rs#L397):
    - generate a fresh secp256k1 keypair,
@@ -462,7 +462,7 @@ Orchestrated by [`useEnvFiles.importPlain`](../desktop/src/hooks/useEnvFiles.ts#
      ([`crypto.rs:406`](../desktop/src-tauri/src/commands/crypto.rs#L406)) — so Remember-Me restore
      can still decrypt later.
 2. `vaultApi.createEnvFile({ …, encrypted_dotenvx_key: wrapped_key_b64, content_b64, variable_count })`
-   — the blob is base64-transported ([`useEnvFiles.ts:100`](../desktop/src/hooks/useEnvFiles.ts#L100)).
+   — the blob is base64-transported ([`useEnvFiles.ts:101`](../desktop/src/hooks/useEnvFiles.ts#L101)).
 3. Server decodes and stores — [`env-file.service.ts:62`](../api/src/services/env-file.service.ts#L62);
    model [`env-file.model.ts`](../api/src/models/env-file.model.ts).
 
@@ -482,7 +482,7 @@ DB env-file doc:
 ```
 
 If the user imports an **already-encrypted** file, the private key is optional
-([`importEncrypted`](../desktop/src/hooks/useEnvFiles.ts#L76)): supply it → it's wrapped and stored;
+([`importEncrypted`](../desktop/src/hooks/useEnvFiles.ts#L85)): supply it → it's wrapped and stored;
 leave blank → `encrypted_dotenvx_key: null` and the file is **view-only** (can be shown/copied in
 encrypted form but never decrypted).
 
@@ -493,15 +493,15 @@ The [`EnvViewer`](../desktop/src/components/env/EnvViewer.tsx) drives this:
 - **Load raw:** `GET /env-files/:id/raw` → [`getEnvFile`](../api/src/services/env-file.service.ts#L83)
   streams back the encrypted blob (audit action `env:view`). Shown as-is.
 - **Decrypt** ([`EnvViewer.tsx:50`](../desktop/src/components/env/EnvViewer.tsx#L50)):
-  [`useEnvFiles.decrypt`](../desktop/src/hooks/useEnvFiles.ts#L108) → [`crypto_env_decrypt`](../desktop/src-tauri/src/commands/crypto.rs#L420)
+  [`useEnvFiles.decrypt`](../desktop/src/hooks/useEnvFiles.ts#L109) → [`crypto_env_decrypt`](../desktop/src-tauri/src/commands/crypto.rs#L420)
   — unwrap the dotenvx private key with the DEK, then `decrypt_env_file` reverses every `encrypted:…`
   back to plaintext ([`dotenvx_compat.rs:64`](../desktop/src-tauri/src/crypto/dotenvx_compat.rs#L64)).
   Disabled when no key is stored ([`EnvViewer.tsx:20`](../desktop/src/components/env/EnvViewer.tsx#L20)).
 - **Edit + save** ([`EnvViewer.tsx:78`](../desktop/src/components/env/EnvViewer.tsx#L78)):
-  [`saveEdit`](../desktop/src/hooks/useEnvFiles.ts#L117) → [`crypto_env_encrypt_existing`](../desktop/src-tauri/src/commands/crypto.rs#L440)
+  [`saveEdit`](../desktop/src/hooks/useEnvFiles.ts#L118) → [`crypto_env_encrypt_existing`](../desktop/src-tauri/src/commands/crypto.rs#L440)
   re-encrypts the edited plaintext under the **same public key** (extracted from the header), then
   `PATCH /env-files/:id` overwrites `content` + `variable_count`
-  ([`env-file.service.ts:97`](../api/src/services/env-file.service.ts#L97)).
+  ([`env-file.service.ts:98`](../api/src/services/env-file.service.ts#L98)).
 
 Because encryption only needs the public key, editing requires no unwrapping beyond the initial
 decrypt — and the file stays decryptable by anyone holding the (still-wrapped) private key.
@@ -513,7 +513,7 @@ decrypt — and the file stays decryptable by anyone holding the (still-wrapped)
 **Scenario:** the user has forgotten the master password but still holds the recovery key shown once
 at signup. The goal is to unlock the *same* vault (same DEK, so all existing ciphertext keeps
 working) and put a *new* password on it — with the server learning nothing. Store actions
-[`auth.ts:209`–273](../desktop/src/stores/auth.ts#L209).
+[`auth.ts:363`–433](../desktop/src/stores/auth.ts#L363).
 
 ### 8.0 The mental model: one payload, two locks
 
@@ -688,9 +688,9 @@ What an attacker with full DB read access actually sees:
 | `orgs` | `org_recovery_wrappedDEK` | `name`, `owner_id`, `org_recovery_salt` |
 | `memberships` | `wrapped_org_dek` | `org_id`, `user_id`, `role`, `status` |
 | `invitations` | — | `org_id`, `email`, `role`, `token_hash`³, `expires_at` |
-| `creds` | `password` | `org_id`, `name`, `url`, `username`, `note` |
-| `api-keys` | `key` | `org_id`, `label`, `url`, `note` |
-| `platform` | `backup_codes[].encrypted_code` | `org_id`, `name`, `note` |
+| `creds` | `password` | `org_id`, `name`, `url`, `username`, `note`, `project_id`⁵ |
+| `api-keys` | `key` | `org_id`, `label`, `url`, `note`, `project_id`⁵ |
+| `platform` | `backup_codes[].encrypted_code` | `org_id`, `name`, `note`, `project_id`⁵ |
 | `env-file` | `content` (dotenvx blob), `encrypted_dotenvx_key` | `org_id`, `label`, `tag`, `variable_count`, `project_id` |
 | `audit-log` | — | org/who/action/outcome/resource/target name/context/ip/ua/when, plus the hash-chain fields⁴ — **never** any secret |
 
@@ -705,6 +705,10 @@ an Org DEK to it. Only the secret half is wrapped.
 ⁴ `chain_id`, `seq`, `prev_hash`, `hash`: each entry is hashed together with the hash before it, so
 editing or deleting a row is detectable. `GET /orgs/:orgId/audit/verify` walks the chain and reports
 where it breaks. See "Tamper evidence" in [TEAMS_ARCHITECTURE.md](TEAMS_ARCHITECTURE.md).
+
+⁵ Optional: these items can stand alone or be filed under a project, and moved between the two.
+Deleting a project detaches them rather than deleting them. Access keys and SSH keys carry the same
+optional link.
 
 Server-side redaction ([`INITIAL_PLAN.md` §7.1](plans/INITIAL_PLAN.md)) keeps `password`, `token`, `authHash`,
 `wrappedDEK`, `refreshToken` out of logs.

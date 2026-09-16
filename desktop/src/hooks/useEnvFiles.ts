@@ -60,6 +60,7 @@ export function useEnvFiles(projectId?: string) {
       },
       saveEdit: async (file: EnvFileDto, plaintext: string, _publicKeyHex: string) =>
         sb.updateEnvFile(file._id, plaintext),
+      move: async (id: string, projectId: string) => sb.moveEnvFile(id, projectId),
       remove: async (id: string) => sb.removeEnvFile(id),
     };
   }
@@ -120,6 +121,11 @@ export function useEnvFiles(projectId?: string) {
         content_b64: toBase64(r.encrypted_env),
         variable_count: r.variable_count,
       });
+      await invalidate();
+    },
+
+    move: async (id: string, projectId: string) => {
+      await vaultApi.updateEnvFile(id, { project_id: projectId });
       await invalidate();
     },
 

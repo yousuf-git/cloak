@@ -162,7 +162,7 @@ export function EnvViewer({ file, onClose, getRaw, decrypt, saveEdit, remove }: 
           {!canDecrypt && (
             <p className="mt-2 flex items-center gap-1.5 text-xs" style={{ color: 'var(--color-fg-muted)' }}>
               <Info className="h-3.5 w-3.5" />
-              No decryption key stored for this file — it was imported pre-encrypted without a key, so
+              No decryption key stored for this file — it was added already encrypted, without a key, so
               it can only be viewed and copied in its encrypted form.
             </p>
           )}

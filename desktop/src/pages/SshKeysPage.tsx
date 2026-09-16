@@ -17,7 +17,8 @@ import { EmptyState, NoResults } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { TextField } from '@/components/ui/TextField';
-import { useSshKeys } from '@/hooks/vault';
+import { useSshKeys, useProjects } from '@/hooks/vault';
+import { ProjectField, ProjectTag, projectNameOf } from '@/components/ProjectField';
 import { useVaultCrypto } from '@/hooks/useVaultCrypto';
 import { useSearch, matchesQuery } from '@/stores/search';
 import type { SshKeyDto } from '@/lib/api';
@@ -28,13 +29,16 @@ const SSH_FILTER: FileFilter[] = [{ name: 'SSH key', extensions: ['pem', 'ppk'] 
 
 export function SshKeysPage() {
   const { items, isLoading, create, update, remove } = useSshKeys();
+  const { items: projects } = useProjects();
   const { encrypt, decrypt } = useVaultCrypto();
   const query = useSearch((s) => s.query);
   const [editing, setEditing] = useState<SshKeyDto | null>(null);
   const [importing, setImporting] = useState(false);
   const [deleting, setDeleting] = useState<SshKeyDto | null>(null);
 
-  const filtered = items.filter((k) => matchesQuery(query, k.title, k.comment, k.note, k.key_type));
+  const filtered = items.filter((k) =>
+    matchesQuery(query, k.title, k.comment, k.note, k.key_type, projectNameOf(k.project_id, projects)),
+  );
 
   // Export the decrypted key back to its original file format (.pem / .ppk).
   const exportKey = async (item: SshKeyDto) => {
@@ -100,6 +104,7 @@ export function SshKeysPage() {
                           {item.comment}
                         </span>
                       )}
+                      <ProjectTag projectId={item.project_id} projects={projects} />
                     </div>
                   </div>
                 </div>
@@ -132,6 +137,7 @@ export function SshKeysPage() {
               comment: v.detected.comment,
               private_key: await encrypt(v.content),
               note: v.note || undefined,
+              project_id: v.projectId || undefined,
             });
           }}
         />
@@ -142,7 +148,7 @@ export function SshKeysPage() {
           initial={editing}
           onClose={() => setEditing(null)}
           onSubmit={async (v) => {
-            await update(editing._id, { title: v.title, note: v.note });
+            await update(editing._id, { title: v.title, note: v.note, project_id: v.projectId || null });
           }}
         />
       )}
@@ -167,6 +173,7 @@ export function SshKeysPage() {
 interface ImportValues {
   title: string;
   note: string;
+  projectId: string;
   content: string;
   detected: DetectedSshKey;
 }
@@ -183,6 +190,7 @@ function ImportSshKeyModal({
   const [filename, setFilename] = useState('');
   const [title, setTitle] = useState('');
   const [note, setNote] = useState('');
+  const [projectId, setProjectId] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -215,7 +223,7 @@ function ImportSshKeyModal({
     setBusy(true);
     setError(null);
     try {
-      await onImport({ title: title.trim(), note, content, detected });
+      await onImport({ title: title.trim(), note, projectId, content, detected });
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Import failed.');
@@ -300,6 +308,7 @@ function ImportSshKeyModal({
         {detected && (
           <>
             <TextField label="Title" placeholder="e.g. prod-web bastion" value={title} onChange={(e) => setTitle(e.target.value)} />
+            <ProjectField value={projectId} onChange={setProjectId} />
             <TextField label="Note (optional)" value={note} onChange={(e) => setNote(e.target.value)} />
           </>
         )}
@@ -324,17 +333,18 @@ function EditSshKeyModal({
 }: {
   initial: SshKeyDto;
   onClose: () => void;
-  onSubmit: (v: { title: string; note: string }) => Promise<void>;
+  onSubmit: (v: { title: string; note: string; projectId: string }) => Promise<void>;
 }) {
   const [title, setTitle] = useState(initial.title);
   const [note, setNote] = useState(initial.note ?? '');
+  const [projectId, setProjectId] = useState(initial.project_id ?? '');
   const [busy, setBusy] = useState(false);
 
   const submit = async () => {
     if (!title.trim()) return;
     setBusy(true);
     try {
-      await onSubmit({ title: title.trim(), note });
+      await onSubmit({ title: title.trim(), note, projectId });
       onClose();
     } finally {
       setBusy(false);
@@ -346,7 +356,7 @@ function EditSshKeyModal({
       open
       onClose={onClose}
       title="Edit SSH key"
-      description="Key material is fixed once imported — only the title and note can change."
+      description="Key material is fixed once imported — only the title, project and note can change."
       footer={
         <>
           <Button variant="ghost" onClick={onClose} disabled={busy}>
@@ -364,6 +374,7 @@ function EditSshKeyModal({
           <TypeBadge>{initial.format}</TypeBadge>
         </div>
         <TextField label="Title" value={title} onChange={(e) => setTitle(e.target.value)} />
+        <ProjectField value={projectId} onChange={setProjectId} />
         <TextField label="Note (optional)" value={note} onChange={(e) => setNote(e.target.value)} />
       </div>
     </Modal>

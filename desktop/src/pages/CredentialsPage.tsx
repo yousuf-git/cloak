@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/Button';
+import { Badge } from '@/components/ui/Badge';
 import { SecretField } from '@/components/ui/SecretField';
 import { RowActions } from '@/components/ui/RowActions';
 import { EmptyState, NoResults } from '@/components/ui/EmptyState';
@@ -23,30 +24,46 @@ import { Modal } from '@/components/ui/Modal';
 import { Select } from '@/components/ui/Select';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { TextField } from '@/components/ui/TextField';
-import { useCreds } from '@/hooks/vault';
+import { useCreds, useProjects } from '@/hooks/vault';
+import { ProjectField, ProjectTag, projectNameOf } from '@/components/ProjectField';
 import { useVaultCrypto } from '@/hooks/useVaultCrypto';
 import { useSearch, matchesQuery } from '@/stores/search';
-import type { CredDto } from '@/lib/api';
+import type { CredDto, ProjectDto } from '@/lib/api';
 import {
   parseCsv,
   autoMap,
   toImportRows,
   normalizeRow,
+  projectColumn,
   CRED_FIELDS,
+  PROJECT_HEADER,
   type ColumnMapping,
   type CredField,
   type ImportRow,
+  type SourcedRow,
 } from '@/lib/csv-parse';
 import {
   credsToCsv,
   encryptBackup,
   decryptBackup,
   asBackupEnvelope,
+  sampleCredsCsv,
 } from '@/lib/vault-export';
+import {
+  planImport,
+  heldBack,
+  imported,
+  failed,
+  logToText,
+  type LogEntry,
+  type LogStatus,
+  type PlannedRow,
+} from '@/lib/cred-import';
 import { saveDownload } from '@/lib/native-fs';
 
 export function CredentialsPage() {
   const { items, isLoading, create, update, remove } = useCreds();
+  const { items: projects } = useProjects();
   const { encrypt, decrypt } = useVaultCrypto();
   const query = useSearch((s) => s.query);
   const [editing, setEditing] = useState<CredDto | null>(null);
@@ -55,7 +72,9 @@ export function CredentialsPage() {
   const [importing, setImporting] = useState(false);
   const [exporting, setExporting] = useState(false);
 
-  const filtered = items.filter((c) => matchesQuery(query, c.name, c.url, c.note));
+  const filtered = items.filter((c) =>
+    matchesQuery(query, c.name, c.url, c.note, projectNameOf(c.project_id, projects)),
+  );
 
   return (
     <div className="flex h-full flex-col">
@@ -121,12 +140,15 @@ export function CredentialsPage() {
                   </div>
                   <div>
                     <p className="text-sm font-medium">{cred.name}</p>
-                    {cred.url && (
-                      <span className="inline-flex items-center gap-1 text-xs" style={{ color: 'var(--color-fg-muted)' }}>
-                        <Link2 className="h-3 w-3" />
-                        {cred.url}
-                      </span>
-                    )}
+                    <div className="flex flex-wrap items-center gap-x-3">
+                      {cred.url && (
+                        <span className="inline-flex items-center gap-1 text-xs" style={{ color: 'var(--color-fg-muted)' }}>
+                          <Link2 className="h-3 w-3" />
+                          {cred.url}
+                        </span>
+                      )}
+                      <ProjectTag projectId={cred.project_id} projects={projects} />
+                    </div>
                   </div>
                 </div>
                 <RowActions onEdit={() => setEditing(cred)} onDelete={() => setDeleting(cred)} />
@@ -164,6 +186,8 @@ export function CredentialsPage() {
               note: values.note || undefined,
               username: values.username, // plaintext — username is not a secret
               password: await encrypt(values.password),
+              // Cleared on an edit means "standalone now", which the server takes as null.
+              project_id: values.projectId || (editing ? null : undefined),
             };
             if (editing) await update(editing._id, payload);
             else await create(payload);
@@ -186,17 +210,17 @@ export function CredentialsPage() {
       {importing && (
         <ImportCredsModal
           existing={items}
+          projects={projects}
           onClose={() => setImporting(false)}
-          onImport={async (rows) => {
-            for (const r of rows) {
-              await create({
-                name: r.name,
-                url: r.url || undefined,
-                note: r.note || undefined,
-                username: r.username,
-                password: await encrypt(r.password),
-              });
-            }
+          importRow={async (r: SourcedRow, projectId: string | null) => {
+            await create({
+              name: r.name,
+              url: r.url || undefined,
+              note: r.note || undefined,
+              username: r.username,
+              password: await encrypt(r.password),
+              project_id: projectId ?? undefined,
+            });
           }}
         />
       )}
@@ -212,6 +236,7 @@ interface FormValues {
   username: string;
   password: string;
   note: string;
+  projectId: string;
 }
 
 function CredentialForm({
@@ -230,6 +255,7 @@ function CredentialForm({
     username: '',
     password: '',
     note: initial?.note ?? '',
+    projectId: initial?.project_id ?? '',
   });
   const [busy, setBusy] = useState(false);
   const set = (k: keyof FormValues) => (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -278,6 +304,7 @@ function CredentialForm({
         <TextField label="URL (optional)" placeholder="console.aws.amazon.com" value={values.url} onChange={set('url')} />
         <TextField label="Username" value={values.username} onChange={set('username')} />
         <TextField label="Password" revealToggle value={values.password} onChange={set('password')} />
+        <ProjectField value={values.projectId} onChange={(projectId) => setValues((v) => ({ ...v, projectId }))} />
         <TextField label="Note (optional)" value={values.note} onChange={set('note')} />
       </div>
     </Modal>
@@ -339,17 +366,28 @@ function Loading() {
 
 // ------------------------------------------------------------------ Import ---
 
-const dedupeKey = (name: string, username: string) =>
-  `${name.trim().toLowerCase()}|${username.trim().toLowerCase()}`;
+const LOG_ORDER: LogStatus[] = ['failed', 'project_unknown', 'project_invalid', 'duplicate', 'imported'];
+
+const LOG_LABEL: Record<LogStatus, { text: string; tone: 'green' | 'amber' | 'red' | 'neutral' }> = {
+  imported: { text: 'Imported', tone: 'green' },
+  failed: { text: 'Failed', tone: 'red' },
+  project_unknown: { text: 'Unknown project', tone: 'red' },
+  project_invalid: { text: 'Invalid project id', tone: 'red' },
+  duplicate: { text: 'Duplicate', tone: 'neutral' },
+};
+
+const CSV_FILTER = [{ name: 'CSV', extensions: ['csv'] }];
 
 function ImportCredsModal({
   existing,
+  projects,
   onClose,
-  onImport,
+  importRow,
 }: {
   existing: CredDto[];
+  projects: ProjectDto[];
   onClose: () => void;
-  onImport: (rows: ImportRow[]) => Promise<void>;
+  importRow: (row: SourcedRow, projectId: string | null) => Promise<void>;
 }) {
   const [raw, setRaw] = useState('');
   const [decrypted, setDecrypted] = useState<string | null>(null);
@@ -363,30 +401,32 @@ function ImportCredsModal({
   });
   const [dedupe, setDedupe] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const [log, setLog] = useState<LogEntry[] | null>(null);
+  const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const envelope = decrypted === null ? asBackupEnvelope(raw) : null;
   const source = decrypted ?? raw;
   const parsed = source.trim() && !envelope ? parseCsv(source) : null;
-  const headerKey = parsed?.headers.join('') ?? '';
+  const headerKey = parsed?.headers.join('\u0000') ?? '';
 
   // Re-run auto-mapping whenever a new set of headers appears.
   useEffect(() => {
     if (parsed) setMapping(autoMap(parsed.headers));
   }, [headerKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const mappedRows = parsed ? toImportRows(parsed, mapping).map(normalizeRow) : [];
-  const existingKeys = new Set(existing.map((c) => dedupeKey(c.name, c.username)));
-  const seen = new Set<string>();
-  const finalRows = mappedRows.filter((r) => {
-    if (!dedupe) return true;
-    const k = dedupeKey(r.name, r.username);
-    if (existingKeys.has(k) || seen.has(k)) return false;
-    seen.add(k);
-    return true;
-  });
-  const skipped = mappedRows.length - finalRows.length;
+  const rows = parsed ? toImportRows(parsed, mapping).map(normalizeRow) : [];
+  const ignoredEmpty = parsed ? parsed.rows.length - rows.length : 0;
+  const hasProjectColumn = parsed ? projectColumn(parsed.headers) !== null : false;
+  const plans = planImport(rows, existing, projects, dedupe);
+  const ready = plans.filter((p) => p.plan.status === 'ready');
+  const linked = ready.filter((p) => p.plan.status === 'ready' && p.plan.projectId).length;
+  const duplicates = plans.filter((p) => p.plan.status === 'duplicate').length;
+  const projectProblems = plans.filter(
+    (p) => p.plan.status === 'project_unknown' || p.plan.status === 'project_invalid',
+  ).length;
 
   const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -403,6 +443,12 @@ function ImportCredsModal({
     }
   };
 
+  const downloadSample = () =>
+    saveDownload('cloak-credentials-sample.csv', sampleCredsCsv(projects[0]), {
+      mime: 'text/csv',
+      filters: CSV_FILTER,
+    });
+
   const decryptBackupNow = async () => {
     if (!envelope) return;
     setBusy(true);
@@ -416,19 +462,47 @@ function ImportCredsModal({
     }
   };
 
+  // Row by row, so one refused row is logged and the rest still go in.
   const runImport = async () => {
-    if (!finalRows.length) return;
+    if (!ready.length) return;
     setBusy(true);
     setError(null);
-    try {
-      await onImport(finalRows);
-      onClose();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Import failed.');
-    } finally {
-      setBusy(false);
+    const entries: LogEntry[] = plans.filter((p) => p.plan.status !== 'ready').map(heldBack);
+    setProgress({ done: 0, total: ready.length });
+    for (const [i, planned] of ready.entries()) {
+      const projectId = planned.plan.status === 'ready' ? planned.plan.projectId : null;
+      try {
+        await importRow(planned.row, projectId);
+        entries.push(imported(planned));
+      } catch (err) {
+        entries.push(failed(planned, err instanceof Error ? err.message : 'unknown error'));
+      }
+      setProgress({ done: i + 1, total: ready.length });
     }
+    setLog(entries);
+    setProgress(null);
+    setBusy(false);
   };
+
+  if (log) {
+    return (
+      <ImportLogView
+        entries={log}
+        ignoredEmpty={ignoredEmpty}
+        copied={copied}
+        onCopy={async () => {
+          try {
+            await navigator.clipboard.writeText(logToText(log, ignoredEmpty));
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1600);
+          } catch {
+            /* clipboard unavailable */
+          }
+        }}
+        onClose={onClose}
+      />
+    );
+  }
 
   const columnOptions = [
     { value: '', label: '— none —' },
@@ -438,9 +512,10 @@ function ImportCredsModal({
   return (
     <Modal
       open
-      onClose={onClose}
+      onClose={busy ? () => {} : onClose}
+      size="lg"
       title="Import credentials"
-      description="Import a Google Password Manager CSV or a Cloak encrypted backup. Passwords are encrypted on this device before saving."
+      description="A Google Password Manager CSV, a Cloak CSV export, or an encrypted Cloak backup. Passwords are encrypted on this device before saving."
       footer={
         <>
           <Button variant="ghost" onClick={onClose} disabled={busy}>
@@ -451,8 +526,10 @@ function ImportCredsModal({
               {busy ? 'Decrypting…' : 'Decrypt backup'}
             </Button>
           ) : (
-            <Button onClick={runImport} disabled={busy || finalRows.length === 0}>
-              {busy ? 'Importing…' : `Import ${finalRows.length || ''}`.trim()}
+            <Button onClick={runImport} disabled={busy || ready.length === 0}>
+              {progress
+                ? `Importing ${progress.done} of ${progress.total}…`
+                : `Import ${ready.length || ''}`.trim()}
             </Button>
           )}
         </>
@@ -460,7 +537,7 @@ function ImportCredsModal({
     >
       <div className="flex flex-col gap-3 pb-4">
         <div className="flex flex-col gap-1.5">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2">
             <label className="text-xs font-medium" style={{ color: 'var(--color-fg-muted)' }}>
               Paste CSV or backup contents
             </label>
@@ -471,15 +548,27 @@ function ImportCredsModal({
               onChange={onFile}
               className="hidden"
             />
-            <button
-              type="button"
-              onClick={() => fileRef.current?.click()}
-              className="no-drag inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-medium transition-colors hover:bg-black/5 dark:hover:bg-white/5"
-              style={{ color: 'var(--color-brand-500)' }}
-            >
-              <FileUp className="h-3.5 w-3.5" />
-              Choose file
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                className="no-drag inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-medium transition-colors hover:bg-black/5 dark:hover:bg-white/5"
+                style={{ color: 'var(--color-brand-500)' }}
+              >
+                <FileUp className="h-3.5 w-3.5" />
+                Choose file
+              </button>
+              <button
+                type="button"
+                onClick={downloadSample}
+                title="A CSV in the shape this import accepts"
+                className="no-drag inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-medium transition-colors hover:bg-black/5 dark:hover:bg-white/5"
+                style={{ color: 'var(--color-fg-muted)' }}
+              >
+                <Download className="h-3.5 w-3.5" />
+                Sample CSV
+              </button>
+            </div>
           </div>
           <textarea
             value={decrypted ?? raw}
@@ -487,13 +576,17 @@ function ImportCredsModal({
               setRaw(e.target.value);
               setDecrypted(null);
             }}
-            readOnly={decrypted !== null}
+            readOnly={decrypted !== null || busy}
             rows={6}
             spellCheck={false}
-            placeholder={'name,url,username,password,note\nGitHub,https://github.com,octocat,••••••,'}
+            placeholder={`name,url,username,password,note,${PROJECT_HEADER}\nGitHub,https://github.com,octocat,••••••,,`}
             className="rounded-lg border px-3 py-2 font-mono text-xs outline-none focus:border-[var(--color-brand-500)]"
             style={{ backgroundColor: 'var(--color-surface-2)', borderColor: 'var(--color-border)', color: 'var(--color-fg)' }}
           />
+          <p className="text-[11px]" style={{ color: 'var(--color-fg-muted)' }}>
+            Linking to projects is optional. A <code className="font-mono">{PROJECT_HEADER}</code> column is
+            only read from files exported by Cloak; leave a cell empty for a standalone credential.
+          </p>
         </div>
 
         {envelope && (
@@ -513,7 +606,7 @@ function ImportCredsModal({
 
         {parsed && (
           <>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               {CRED_FIELDS.map((field) => (
                 <Select
                   key={field}
@@ -539,35 +632,31 @@ function ImportCredsModal({
               </p>
             )}
 
-            <div className="flex flex-col gap-1.5">
-              <p className="flex items-center gap-1.5 text-[11px]" style={{ color: '#16a34a' }}>
+            <ul className="flex flex-col gap-0.5 text-xs">
+              <li className="flex items-center gap-1.5" style={{ color: ready.length ? '#16a34a' : 'var(--color-fg-muted)' }}>
                 <CheckCircle2 className="h-3.5 w-3.5" />
-                {finalRows.length} to import
-                {skipped > 0 ? ` · ${skipped} duplicate${skipped === 1 ? '' : 's'} skipped` : ''}
-              </p>
-              {finalRows.length > 0 && (
-                <div className="max-h-40 overflow-auto rounded-lg border" style={{ borderColor: 'var(--color-border)' }}>
-                  <table className="w-full text-left text-[11px]">
-                    <thead>
-                      <tr style={{ color: 'var(--color-fg-muted)' }}>
-                        <th className="px-2 py-1 font-medium">Name</th>
-                        <th className="px-2 py-1 font-medium">Username</th>
-                        <th className="px-2 py-1 font-medium">Password</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {finalRows.slice(0, 8).map((r, i) => (
-                        <tr key={i} style={{ borderTop: '1px solid var(--color-border)' }}>
-                          <td className="truncate px-2 py-1">{r.name}</td>
-                          <td className="truncate px-2 py-1">{r.username || '—'}</td>
-                          <td className="px-2 py-1 font-mono">{r.password ? '••••••' : '—'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                {ready.length} ready to import
+                {hasProjectColumn && ` — ${linked} into a project, ${ready.length - linked} standalone`}
+              </li>
+              {projectProblems > 0 && (
+                <li className="flex items-center gap-1.5" style={{ color: 'var(--color-danger)' }}>
+                  <ShieldAlert className="h-3.5 w-3.5" />
+                  {projectProblems} won&apos;t be imported: their project id doesn&apos;t match a project here
+                </li>
               )}
-            </div>
+              {duplicates > 0 && (
+                <li style={{ color: 'var(--color-fg-muted)' }}>
+                  {duplicates} duplicate{duplicates === 1 ? '' : 's'} will be skipped
+                </li>
+              )}
+              {ignoredEmpty > 0 && (
+                <li style={{ color: 'var(--color-fg-muted)' }}>
+                  {ignoredEmpty} empty row{ignoredEmpty === 1 ? '' : 's'} ignored
+                </li>
+              )}
+            </ul>
+
+            {plans.length > 0 && <ImportPreview plans={plans} showProject={hasProjectColumn} />}
           </>
         )}
 
@@ -577,6 +666,132 @@ function ImportCredsModal({
             {error}
           </p>
         )}
+      </div>
+    </Modal>
+  );
+}
+
+/** Every row and what the import will do with it, before anything is written. */
+function ImportPreview({ plans, showProject }: { plans: PlannedRow[]; showProject: boolean }) {
+  return (
+    <div className="max-h-56 overflow-auto rounded-lg border" style={{ borderColor: 'var(--color-border)' }}>
+      <table className="w-full text-left text-[11px]">
+        <thead className="sticky top-0" style={{ backgroundColor: 'var(--color-surface)' }}>
+          <tr style={{ color: 'var(--color-fg-muted)' }}>
+            <th className="px-2 py-1 font-medium">Line</th>
+            <th className="px-2 py-1 font-medium">Name</th>
+            <th className="px-2 py-1 font-medium">Username</th>
+            {showProject && <th className="px-2 py-1 font-medium">Project</th>}
+            <th className="px-2 py-1 font-medium">Will</th>
+          </tr>
+        </thead>
+        <tbody>
+          {plans.map(({ row, plan }) => (
+            <tr key={row.line} style={{ borderTop: '1px solid var(--color-border)' }}>
+              <td className="px-2 py-1 tabular-nums" style={{ color: 'var(--color-fg-muted)' }}>{row.line}</td>
+              <td className="max-w-40 truncate px-2 py-1">{row.name}</td>
+              <td className="max-w-32 truncate px-2 py-1">{row.username || '—'}</td>
+              {showProject && (
+                <td className="max-w-40 truncate px-2 py-1">
+                  {plan.status === 'ready' ? (
+                    plan.projectName ?? <span style={{ color: 'var(--color-fg-muted)' }}>Standalone</span>
+                  ) : plan.status === 'project_unknown' ? (
+                    <span style={{ color: 'var(--color-danger)' }} title={plan.value}>No such project</span>
+                  ) : plan.status === 'project_invalid' ? (
+                    <span style={{ color: 'var(--color-danger)' }} title={plan.value}>Not a project id</span>
+                  ) : (
+                    <span style={{ color: 'var(--color-fg-muted)' }}>—</span>
+                  )}
+                </td>
+              )}
+              <td className="px-2 py-1">
+                {plan.status === 'ready' ? (
+                  <Badge tone="green">Import</Badge>
+                ) : plan.status === 'duplicate' ? (
+                  <Badge tone="neutral">Skip</Badge>
+                ) : (
+                  <Badge tone="red">Hold back</Badge>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/**
+ * What the import actually did, row by row: problems first, since those are the
+ * rows that need a decision, then what was skipped and what went in.
+ */
+function ImportLogView({
+  entries,
+  ignoredEmpty,
+  copied,
+  onCopy,
+  onClose,
+}: {
+  entries: LogEntry[];
+  ignoredEmpty: number;
+  copied: boolean;
+  onCopy: () => void;
+  onClose: () => void;
+}) {
+  const count = (status: LogStatus) => entries.filter((e) => e.status === status).length;
+  const sorted = entries
+    .slice()
+    .sort((a, b) => LOG_ORDER.indexOf(a.status) - LOG_ORDER.indexOf(b.status) || a.line - b.line);
+  const notImported = count('failed') + count('project_unknown') + count('project_invalid');
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      size="lg"
+      title="Import finished"
+      description={
+        notImported > 0
+          ? `${count('imported')} imported. ${notImported} need attention — fix those rows in the file and import it again; rows already imported will be skipped as duplicates.`
+          : `${count('imported')} imported.`
+      }
+      footer={
+        <>
+          <Button variant="ghost" icon={copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />} onClick={onCopy}>
+            {copied ? 'Copied' : 'Copy log'}
+          </Button>
+          <Button onClick={onClose}>Done</Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-3 pb-4">
+        <div className="flex flex-wrap gap-1.5">
+          {LOG_ORDER.filter((s) => count(s) > 0).map((s) => (
+            <Badge key={s} tone={LOG_LABEL[s].tone}>
+              {count(s)} {LOG_LABEL[s].text.toLowerCase()}
+            </Badge>
+          ))}
+          {ignoredEmpty > 0 && <Badge tone="neutral">{ignoredEmpty} empty ignored</Badge>}
+        </div>
+
+        <ul className="flex flex-col divide-y rounded-lg border" style={{ borderColor: 'var(--color-border)' }}>
+          {sorted.map((entry) => (
+            <li key={`${entry.line}-${entry.status}`} className="flex gap-3 px-3 py-2">
+              <span className="w-12 shrink-0 text-[11px] tabular-nums" style={{ color: 'var(--color-fg-muted)' }}>
+                line {entry.line}
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="truncate text-xs font-medium">{entry.name}</span>
+                  <Badge tone={LOG_LABEL[entry.status].tone}>{LOG_LABEL[entry.status].text}</Badge>
+                </div>
+                <p className="mt-0.5 text-[11px]" style={{ color: 'var(--color-fg-muted)' }}>
+                  {entry.detail}
+                </p>
+              </div>
+            </li>
+          ))}
+        </ul>
       </div>
     </Modal>
   );
@@ -605,6 +820,7 @@ function ExportCredsModal({ items, onClose }: { items: CredDto[]; onClose: () =>
         username: c.username, // plaintext
         password: await decrypt(c.password),
         note: c.note ?? '',
+        project_id: c.project_id ?? '',
       })),
     );
 

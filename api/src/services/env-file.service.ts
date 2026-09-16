@@ -92,6 +92,7 @@ export interface UpdateEnvInput {
   encrypted_dotenvx_key?: string | null;
   content_b64?: string;
   variable_count?: number;
+  project_id?: string;
 }
 
 export async function updateEnvFile({ orgId }: Scope, id: string, input: UpdateEnvInput) {
@@ -100,6 +101,14 @@ export async function updateEnvFile({ orgId }: Scope, id: string, input: UpdateE
 
   let changes: EnvChanges | undefined;
   const renamedFrom = input.label !== undefined && input.label !== doc.label ? doc.label : undefined;
+  let movedFrom: string | undefined;
+
+  if (input.project_id !== undefined && input.project_id !== doc.project_id?.toString()) {
+    const project = await Project.exists({ _id: input.project_id, org_id: orgId });
+    if (!project) throw new ValidationError('Unknown project for this organization');
+    movedFrom = doc.project_id?.toString();
+    doc.set('project_id', input.project_id);
+  }
 
   if (input.content_b64 !== undefined) {
     const next = decodeBlob(input.content_b64);
@@ -114,7 +123,7 @@ export async function updateEnvFile({ orgId }: Scope, id: string, input: UpdateE
   await doc.save();
   const obj = doc.toObject();
   delete (obj as { content?: string }).content;
-  return { file: obj, changes, renamedFrom };
+  return { file: obj, changes, renamedFrom, movedFrom };
 }
 
 export async function deleteEnvFile({ orgId }: Scope, id: string) {

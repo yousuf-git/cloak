@@ -18,7 +18,8 @@ import { EmptyState, NoResults } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { TextField } from '@/components/ui/TextField';
-import { useAccessKeys } from '@/hooks/vault';
+import { useAccessKeys, useProjects } from '@/hooks/vault';
+import { ProjectField, ProjectTag, projectNameOf } from '@/components/ProjectField';
 import { useVaultCrypto } from '@/hooks/useVaultCrypto';
 import { useSearch, matchesQuery } from '@/stores/search';
 import type { AccessKeyDto } from '@/lib/api';
@@ -29,13 +30,16 @@ const CSV_FILTER: FileFilter[] = [{ name: 'CSV', extensions: ['csv'] }];
 
 export function AccessKeysPage() {
   const { items, isLoading, create, update, remove } = useAccessKeys();
+  const { items: projects } = useProjects();
   const { encrypt, decrypt } = useVaultCrypto();
   const query = useSearch((s) => s.query);
   const [editing, setEditing] = useState<AccessKeyDto | null>(null);
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState<AccessKeyDto | null>(null);
 
-  const filtered = items.filter((k) => matchesQuery(query, k.title, k.access_key_id, k.note));
+  const filtered = items.filter((k) =>
+    matchesQuery(query, k.title, k.access_key_id, k.note, projectNameOf(k.project_id, projects)),
+  );
 
   // Export one access key as an AWS-shaped credentials CSV.
   const exportKey = async (item: AccessKeyDto) => {
@@ -91,7 +95,10 @@ export function AccessKeysPage() {
                   <div className="flex h-9 w-9 items-center justify-center rounded-lg" style={{ backgroundColor: 'var(--color-surface-2)' }}>
                     <KeySquare className="h-4 w-4" style={{ color: 'var(--color-brand-500)' }} />
                   </div>
-                  <p className="text-sm font-medium">{item.title}</p>
+                  <div>
+                    <p className="text-sm font-medium">{item.title}</p>
+                    <ProjectTag projectId={item.project_id} projects={projects} />
+                  </div>
                 </div>
                 <RowActions
                   onDownload={() => exportKey(item)}
@@ -131,6 +138,8 @@ export function AccessKeysPage() {
               access_key_id: values.accessKeyId,
               secret_access_key: await encrypt(values.secretAccessKey),
               note: values.note || undefined,
+              // Cleared on an edit means "standalone now", which the server takes as null.
+              project_id: values.projectId || (editing ? null : undefined),
             };
             if (editing) await update(editing._id, payload);
             else await create(payload);
@@ -158,6 +167,7 @@ interface FormValues {
   accessKeyId: string;
   secretAccessKey: string;
   note: string;
+  projectId: string;
 }
 
 function AccessKeyForm({
@@ -175,6 +185,7 @@ function AccessKeyForm({
     accessKeyId: initial?.access_key_id ?? '',
     secretAccessKey: '',
     note: initial?.note ?? '',
+    projectId: initial?.project_id ?? '',
   });
   const [busy, setBusy] = useState(false);
   const [csvError, setCsvError] = useState<string | null>(null);
@@ -286,6 +297,7 @@ function AccessKeyForm({
         <TextField label="Title" placeholder="e.g. AWS — Deploy Bot" value={values.title} onChange={set('title')} />
         <TextField label="Access Key ID" placeholder="AKIA…" value={values.accessKeyId} onChange={set('accessKeyId')} />
         <TextField label="Secret Access Key" revealToggle value={values.secretAccessKey} onChange={set('secretAccessKey')} />
+        <ProjectField value={values.projectId} onChange={(projectId) => setValues((v) => ({ ...v, projectId }))} />
         <TextField label="Note (optional)" value={values.note} onChange={set('note')} />
       </div>
     </Modal>

@@ -14,7 +14,9 @@
 
 import type { ImportRow } from './csv-parse';
 
-const CSV_HEADER = ['name', 'url', 'username', 'password', 'note'] as const;
+// project_id rides last, so a manager that knows only Google's five columns can
+// still read the rest of the file.
+const CSV_HEADER = ['name', 'url', 'username', 'password', 'note', 'project_id'] as const;
 
 function csvEscape(value: string): string {
   return /[",\n\r]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
@@ -24,9 +26,42 @@ function csvEscape(value: string): string {
 export function credsToCsv(rows: ImportRow[]): string {
   const lines = [CSV_HEADER.join(',')];
   for (const r of rows) {
-    lines.push([r.name, r.url, r.username, r.password, r.note].map((v) => csvEscape(v ?? '')).join(','));
+    lines.push(
+      [r.name, r.url, r.username, r.password, r.note, r.project_id]
+        .map((v) => csvEscape(v ?? ''))
+        .join(','),
+    );
   }
   return lines.join('\r\n');
+}
+
+/**
+ * A file showing the shape the import accepts: the columns Cloak exports, one
+ * standalone login, and — when there is a project to point at — one linked to it.
+ * Without a project, the linked row is left blank rather than given an id that
+ * would fail the import.
+ */
+export function sampleCredsCsv(project?: { _id: string; name: string }): string {
+  return credsToCsv([
+    {
+      name: 'GitHub',
+      url: 'https://github.com',
+      username: 'octocat',
+      password: 'replace-with-a-real-password',
+      note: 'Standalone: project_id left empty',
+      project_id: '',
+    },
+    {
+      name: 'Staging database',
+      url: 'postgres://staging.internal',
+      username: 'app',
+      password: 'replace-with-a-real-password',
+      note: project
+        ? `Linked to ${project.name} by its project id`
+        : 'Put a project id here to link it — ids come from a Cloak export',
+      project_id: project?._id ?? '',
+    },
+  ]);
 }
 
 /** Trigger a browser download of a text blob. */

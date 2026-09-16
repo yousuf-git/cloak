@@ -4,6 +4,9 @@ const objectId = z.string().regex(/^[a-f\d]{24}$/i, 'Invalid id');
 const cipher = z.string().min(1).max(8192);
 const shortText = z.string().trim().min(1).max(200);
 const optionalText = z.string().trim().max(500).optional();
+// Linking to a project is optional everywhere but env files. On update, null
+// detaches the item and leaves it standalone.
+const projectLink = objectId.nullable().optional();
 
 export const idParamSchema = z.object({ id: objectId });
 
@@ -24,7 +27,7 @@ export const credCreateSchema = z.object({
   note: optionalText,
   project_id: objectId.optional(),
 });
-export const credUpdateSchema = credCreateSchema.partial();
+export const credUpdateSchema = credCreateSchema.partial().extend({ project_id: projectLink });
 
 // ---- API Keys ----
 export const apiKeyCreateSchema = z.object({
@@ -34,7 +37,7 @@ export const apiKeyCreateSchema = z.object({
   note: optionalText,
   project_id: objectId.optional(),
 });
-export const apiKeyUpdateSchema = apiKeyCreateSchema.partial();
+export const apiKeyUpdateSchema = apiKeyCreateSchema.partial().extend({ project_id: projectLink });
 
 // ---- Access Keys (access key ID + secret access key) ----
 export const accessKeyCreateSchema = z.object({
@@ -44,7 +47,7 @@ export const accessKeyCreateSchema = z.object({
   note: optionalText,
   project_id: objectId.optional(),
 });
-export const accessKeyUpdateSchema = accessKeyCreateSchema.partial();
+export const accessKeyUpdateSchema = accessKeyCreateSchema.partial().extend({ project_id: projectLink });
 
 // ---- SSH Keys (import-only) ----
 const sshKeyType = z.enum(['RSA', 'ED25519']);
@@ -61,12 +64,13 @@ export const sshKeyCreateSchema = z.object({
   project_id: objectId.optional(),
 });
 // Import-only: the key material/type/format are fixed once imported — only
-// metadata (title, comment, note) is editable.
+// metadata (title, comment, note, project) is editable.
 export const sshKeyUpdateSchema = z
   .object({
     title: shortText.optional(),
     comment: optionalText,
     note: optionalText,
+    project_id: projectLink,
   })
   .refine((d) => Object.keys(d).length > 0, { message: 'No fields to update' });
 
@@ -80,7 +84,7 @@ export const platformCreateSchema = z.object({
 export const platformUpdateSchema = z.object({
   name: shortText.optional(),
   note: optionalText,
-  project_id: objectId.optional(),
+  project_id: projectLink,
 });
 export const backupCodesAddSchema = z.object({
   backup_codes: z.array(z.object({ encrypted_code: cipher })).min(1).max(50),
@@ -111,5 +115,7 @@ export const envUpdateSchema = z
     encrypted_dotenvx_key: cipher.nullable().optional(),
     content_b64: blobB64.optional(),
     variable_count: z.number().int().min(0).max(10_000).optional(),
+    // Moves the file. Never null: an env file always belongs to a project.
+    project_id: objectId.optional(),
   })
   .refine((d) => Object.keys(d).length > 0, { message: 'No fields to update' });

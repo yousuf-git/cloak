@@ -9,20 +9,24 @@ import { EmptyState, NoResults } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { TextField } from '@/components/ui/TextField';
-import { useApiKeys } from '@/hooks/vault';
+import { useApiKeys, useProjects } from '@/hooks/vault';
+import { ProjectField, ProjectTag, projectNameOf } from '@/components/ProjectField';
 import { useVaultCrypto } from '@/hooks/useVaultCrypto';
 import { useSearch, matchesQuery } from '@/stores/search';
 import type { ApiKeyDto } from '@/lib/api';
 
 export function ApiKeysPage() {
   const { items, isLoading, create, update, remove } = useApiKeys();
+  const { items: projects } = useProjects();
   const { encrypt, decrypt } = useVaultCrypto();
   const query = useSearch((s) => s.query);
   const [editing, setEditing] = useState<ApiKeyDto | null>(null);
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState<ApiKeyDto | null>(null);
 
-  const filtered = items.filter((k) => matchesQuery(query, k.label, k.url, k.note));
+  const filtered = items.filter((k) =>
+    matchesQuery(query, k.label, k.url, k.note, projectNameOf(k.project_id, projects)),
+  );
 
   return (
     <div className="flex h-full flex-col">
@@ -69,12 +73,15 @@ export function ApiKeysPage() {
                   </div>
                   <div>
                     <p className="text-sm font-medium">{item.label}</p>
-                    {item.url && (
-                      <span className="inline-flex items-center gap-1 text-xs" style={{ color: 'var(--color-fg-muted)' }}>
-                        <Link2 className="h-3 w-3" />
-                        {item.url}
-                      </span>
-                    )}
+                    <div className="flex flex-wrap items-center gap-x-3">
+                      {item.url && (
+                        <span className="inline-flex items-center gap-1 text-xs" style={{ color: 'var(--color-fg-muted)' }}>
+                          <Link2 className="h-3 w-3" />
+                          {item.url}
+                        </span>
+                      )}
+                      <ProjectTag projectId={item.project_id} projects={projects} />
+                    </div>
                   </div>
                 </div>
                 <RowActions onEdit={() => setEditing(item)} onDelete={() => setDeleting(item)} />
@@ -104,6 +111,8 @@ export function ApiKeysPage() {
               url: values.url || undefined,
               note: values.note || undefined,
               key: await encrypt(values.key),
+              // Cleared on an edit means "standalone now", which the server takes as null.
+              project_id: values.projectId || (editing ? null : undefined),
             };
             if (editing) await update(editing._id, payload);
             else await create(payload);
@@ -131,6 +140,7 @@ interface FormValues {
   url: string;
   key: string;
   note: string;
+  projectId: string;
 }
 
 function ApiKeyForm({
@@ -148,6 +158,7 @@ function ApiKeyForm({
     url: initial?.url ?? '',
     key: '',
     note: initial?.note ?? '',
+    projectId: initial?.project_id ?? '',
   });
   const [busy, setBusy] = useState(false);
   const set = (k: keyof FormValues) => (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -193,6 +204,7 @@ function ApiKeyForm({
         <TextField label="Label" placeholder="e.g. Stripe — Live" value={values.label} onChange={set('label')} />
         <TextField label="URL (optional)" placeholder="stripe.com" value={values.url} onChange={set('url')} />
         <TextField label="Key" revealToggle value={values.key} onChange={set('key')} />
+        <ProjectField value={values.projectId} onChange={(projectId) => setValues((v) => ({ ...v, projectId }))} />
         <TextField label="Note (optional)" value={values.note} onChange={set('note')} />
       </div>
     </Modal>

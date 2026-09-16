@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Upload, FileLock2, Eye, FolderLock, Loader2, ShieldAlert, Info, CheckCircle2, Plus, X } from 'lucide-react';
+import { FileLock2, Eye, FolderLock, FolderInput, Loader2, ShieldAlert, Info, CheckCircle2, Plus } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -9,6 +9,8 @@ import { Modal } from '@/components/ui/Modal';
 import { TextField } from '@/components/ui/TextField';
 import { Select } from '@/components/ui/Select';
 import { EnvViewer } from '@/components/env/EnvViewer';
+import { ProjectField } from '@/components/ProjectField';
+import { MoveToProjectDialog } from '@/components/MoveToProjectDialog';
 import { useEnvFiles } from '@/hooks/useEnvFiles';
 import { useProjects } from '@/hooks/vault';
 import { useSearch, matchesQuery } from '@/stores/search';
@@ -24,12 +26,16 @@ const tagTone: Record<EnvTag, 'green' | 'amber' | 'red' | 'brand'> = {
 
 export function EnvFilesPage() {
   const env = useEnvFiles();
-  const { items: projects, create: createProject } = useProjects();
+  const { items: projects, isLoading: projectsLoading } = useProjects();
   const query = useSearch((s) => s.query);
   const [viewing, setViewing] = useState<EnvFileDto | null>(null);
-  const [importing, setImporting] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [moving, setMoving] = useState<EnvFileDto | null>(null);
 
-  const projectName = (id: string) => projects.find((p) => p._id === id)?.name ?? 'Unassigned';
+  // A file whose project was deleted still points at it. Say so, since moving it is the fix.
+  const projectMissing = (id: string) => !projectsLoading && !projects.some((p) => p._id === id);
+  const projectName = (id: string) =>
+    projects.find((p) => p._id === id)?.name ?? (projectMissing(id) ? 'Project deleted' : '…');
   const filtered = env.items.filter((f) => matchesQuery(query, f.label, projectName(f.project_id), f.tag));
 
   return (
@@ -38,8 +44,8 @@ export function EnvFilesPage() {
         title="Env Files"
         description="dotenvx-encrypted .env files. Stored encrypted; decrypted only on demand with your key."
         actions={
-          <Button size="sm" icon={<Upload className="h-4 w-4" />} onClick={() => setImporting(true)}>
-            Import .env
+          <Button size="sm" icon={<Plus className="h-4 w-4" />} onClick={() => setCreating(true)}>
+            New Env File
           </Button>
         }
       />
@@ -52,10 +58,10 @@ export function EnvFilesPage() {
         <EmptyState
           icon={FileLock2}
           title="No env files yet"
-          description="Import a .env file — plain or already dotenvx-encrypted. It's stored encrypted and only decrypted when you ask."
+          description="Add a .env file — plain or already dotenvx-encrypted. It's stored encrypted and only decrypted when you ask."
           action={
-            <Button icon={<Upload className="h-4 w-4" />} onClick={() => setImporting(true)}>
-              Import your first .env
+            <Button icon={<Plus className="h-4 w-4" />} onClick={() => setCreating(true)}>
+              Add your first .env
             </Button>
           }
         />
@@ -75,13 +81,19 @@ export function EnvFilesPage() {
               <FileLock2 className="h-4 w-4 shrink-0" style={{ color: 'var(--color-fg-muted)' }} />
               <div className="min-w-0 flex-1">
                 <p className="truncate font-mono text-sm">{file.label}</p>
-                <span className="inline-flex items-center gap-1 text-xs" style={{ color: 'var(--color-fg-muted)' }}>
+                <span
+                  className="inline-flex items-center gap-1 text-xs"
+                  style={{ color: projectMissing(file.project_id) ? '#f59e0b' : 'var(--color-fg-muted)' }}
+                >
                   <FolderLock className="h-3 w-3" />
                   {projectName(file.project_id)} · {file.variable_count} vars
                   {!file.encrypted_dotenvx_key && ' · view-only'}
                 </span>
               </div>
               <Badge tone={tagTone[file.tag]}>{file.tag}</Badge>
+              <Button size="sm" variant="ghost" icon={<FolderInput className="h-3.5 w-3.5" />} onClick={() => setMoving(file)}>
+                Move
+              </Button>
               <Button size="sm" variant="ghost" icon={<Eye className="h-3.5 w-3.5" />} onClick={() => setViewing(file)}>
                 View
               </Button>
@@ -103,14 +115,20 @@ export function EnvFilesPage() {
         )}
       </AnimatePresence>
 
-      {importing && (
-        <ImportEnvModal
-          projects={projects.map((p) => ({ id: p._id, name: p.name }))}
-          onCreateProject={async (name) => {
-            const p = await createProject({ name });
-            return { id: p._id, name: p.name };
-          }}
-          onClose={() => setImporting(false)}
+      {moving && (
+        <MoveToProjectDialog
+          itemName={moving.label}
+          currentProjectId={moving.project_id}
+          required
+          onMove={(projectId) => env.move(moving._id, projectId!)}
+          onClose={() => setMoving(null)}
+        />
+      )}
+
+      {creating && (
+        <NewEnvFileModal
+          defaultProjectId={projects[0]?._id ?? ''}
+          onClose={() => setCreating(false)}
           onImportPlain={env.importPlain}
           onImportEncrypted={env.importEncrypted}
         />
@@ -119,15 +137,13 @@ export function EnvFilesPage() {
   );
 }
 
-function ImportEnvModal({
-  projects,
-  onCreateProject,
+function NewEnvFileModal({
+  defaultProjectId,
   onClose,
   onImportPlain,
   onImportEncrypted,
 }: {
-  projects: { id: string; name: string }[];
-  onCreateProject: (name: string) => Promise<{ id: string; name: string }>;
+  defaultProjectId: string;
   onClose: () => void;
   onImportPlain: (pid: string, label: string, tag: EnvTag, plaintext: string) => Promise<void>;
   onImportEncrypted: (
@@ -138,7 +154,7 @@ function ImportEnvModal({
     key?: string,
   ) => Promise<void>;
 }) {
-  const [projectId, setProjectId] = useState(projects[0]?.id ?? '');
+  const [projectId, setProjectId] = useState(defaultProjectId);
   const [label, setLabel] = useState('.env.local');
   const [tag, setTag] = useState<EnvTag>('Local');
   const [mode, setMode] = useState<'plain' | 'encrypted'>('plain');
@@ -146,28 +162,6 @@ function ImportEnvModal({
   const [key, setKey] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // Inline "create project on the go" — no project exists, or user wants a new one.
-  const [creatingProject, setCreatingProject] = useState(projects.length === 0);
-  const [newProjectName, setNewProjectName] = useState('');
-  const [projBusy, setProjBusy] = useState(false);
-
-  const createProjectNow = async () => {
-    const name = newProjectName.trim();
-    if (!name) return;
-    setProjBusy(true);
-    setError(null);
-    try {
-      const p = await onCreateProject(name);
-      setProjectId(p.id);
-      setNewProjectName('');
-      setCreatingProject(false);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not create project.');
-    } finally {
-      setProjBusy(false);
-    }
-  };
 
   // Live structural validation of the pasted/loaded content.
   const parsed = content.trim() ? parseEnv(content) : null;
@@ -188,7 +182,7 @@ function ImportEnvModal({
       }
       onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Import failed.');
+      setError(e instanceof Error ? e.message : 'Could not save the env file.');
     } finally {
       setBusy(false);
     }
@@ -198,60 +192,17 @@ function ImportEnvModal({
     <Modal
       open
       onClose={onClose}
-      title="Import .env file"
+      title="New env file"
       description="Choose whether your file is plaintext or already dotenvx-encrypted."
       footer={
         <>
           <Button variant="ghost" onClick={onClose} disabled={busy}>Cancel</Button>
-          <Button onClick={submit} disabled={busy || !canSubmit}>{busy ? 'Encrypting…' : 'Import'}</Button>
+          <Button onClick={submit} disabled={busy || !canSubmit}>{busy ? 'Encrypting…' : 'Create'}</Button>
         </>
       }
     >
       <div className="flex flex-col gap-3 pb-4">
-        {projects.length > 0 && (
-          <div className="flex items-end gap-2">
-            <div className="min-w-0 flex-1">
-              <Select
-                label="Project"
-                value={projectId}
-                onChange={setProjectId}
-                options={projects.map((p) => ({ value: p.id, label: p.name }))}
-              />
-            </div>
-            <button
-              type="button"
-              onClick={() => setCreatingProject((v) => !v)}
-              title="New project"
-              aria-label="New project"
-              className="no-drag flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border transition-colors hover:bg-black/5 dark:hover:bg-white/5"
-              style={{ borderColor: 'var(--color-border)', color: 'var(--color-brand-500)' }}
-            >
-              {creatingProject ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-            </button>
-          </div>
-        )}
-
-        {creatingProject && (
-          <div className="flex items-end gap-2">
-            <div className="min-w-0 flex-1">
-              <TextField
-                label={projects.length === 0 ? 'Create a project (env files belong to one)' : 'New project name'}
-                placeholder="e.g. Acme API"
-                value={newProjectName}
-                onChange={(e) => setNewProjectName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    createProjectNow();
-                  }
-                }}
-              />
-            </div>
-            <Button size="sm" onClick={createProjectNow} disabled={projBusy || !newProjectName.trim()}>
-              {projBusy ? 'Creating…' : 'Create'}
-            </Button>
-          </div>
-        )}
+        <ProjectField required value={projectId} onChange={setProjectId} />
 
         <div className="grid grid-cols-2 gap-3">
           <TextField label="Label" placeholder=".env.production" value={label} onChange={(e) => setLabel(e.target.value)} />

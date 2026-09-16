@@ -191,9 +191,9 @@ the real `dotenvx` CLI and can be decrypted outside Cloak entirely.
 
 ### 3.5 PBKDF2-SHA256 + AES-256-GCM — portable backups
 
-[`lib/vault-export.ts:79`](../desktop/src/lib/vault-export.ts#L79). Used only for the `.cloak`
+[`lib/vault-export.ts:114`](../desktop/src/lib/vault-export.ts#L114). Used only for the `.cloak`
 export envelope, which is deliberately independent of the vault DEK so it can be opened on any
-device. 210 000 iterations ([`vault-export.ts:35`](../desktop/src/lib/vault-export.ts#L35)).
+device. 210 000 iterations ([`vault-export.ts:70`](../desktop/src/lib/vault-export.ts#L70)).
 
 ### 3.6 SHA-256 — token fingerprints
 
@@ -328,8 +328,8 @@ and strips every separator. A user can retype it lowercase, with spaces instead 
 still matches.
 
 It is displayed exactly once, immediately after signup, and held in the auth store only until the
-user dismisses the screen ([`stores/auth.ts:193`](../desktop/src/stores/auth.ts#L193), cleared at
-[`:222`](../desktop/src/stores/auth.ts#L222)). **Nothing in Cloak — client, server or database —
+user dismisses the screen ([`stores/auth.ts:202`](../desktop/src/stores/auth.ts#L202), cleared at
+[`:231`](../desktop/src/stores/auth.ts#L231)). **Nothing in Cloak — client, server or database —
 retains a copy.** If the user loses it and forgets their password, the account is unrecoverable by
 design.
 
@@ -461,12 +461,16 @@ without a decrypt.
 
 | Collection | Encrypted field | Plaintext alongside it |
 |------------|-----------------|------------------------|
-| `creds` | `password` | `name`, `url`, **`username`**, `note` |
-| `api-keys` | `key` | `label`, `url`, `note` |
-| `access-keys` | `secret_access_key` | `title`, **`access_key_id`**, `note` |
-| `ssh-keys` | `private_key` (the whole key file) | `title`, `key_type`, `format`, `comment`, `note` |
-| `platform` | `backup_codes[].encrypted_code` | `name`, `note`, `is_used`, `used_at` |
+| `creds` | `password` | `name`, `url`, **`username`**, `note`, `project_id`* |
+| `api-keys` | `key` | `label`, `url`, `note`, `project_id`* |
+| `access-keys` | `secret_access_key` | `title`, **`access_key_id`**, `note`, `project_id`* |
+| `ssh-keys` | `private_key` (the whole key file) | `title`, `key_type`, `format`, `comment`, `note`, `project_id`* |
+| `platform` | `backup_codes[].encrypted_code` | `name`, `note`, `is_used`, `used_at`, `project_id`* |
 | `env-files` | `content`, `encrypted_dotenvx_key` | `label`, `tag`, `variable_count`, `project_id` |
+
+\* Optional. An env file always belongs to a project; everything else can stand alone, be moved
+into a project later, or be moved out again. Deleting a project detaches those items rather than
+deleting them.
 
 Two of those plaintext choices are deliberate and worth being explicit about, because they are the
 ones a reader is most likely to assume are encrypted:
@@ -639,12 +643,14 @@ credential. Both sit in the same `.env`. Neither can decrypt vault data.
 ```
 
 The passphrase is chosen by the user, never stored, and PBKDF2-stretched with a fresh 16-byte salt to
-an AES-256-GCM key ([`vault-export.ts:79`](../desktop/src/lib/vault-export.ts#L79)). A 12-byte random
+an AES-256-GCM key ([`vault-export.ts:114`](../desktop/src/lib/vault-export.ts#L114)). A 12-byte random
 IV per envelope. It decrypts on any device with the passphrase, with no vault, no DEK and no server.
 
 The other export format is a **Google-compatible plaintext CSV** — `name,url,username,password,note`,
-entirely unencrypted, so it round-trips into any password manager. It is gated behind an explicit
-confirmation in the UI, and it should be: it is your whole vault in the clear.
+plus a trailing `project_id` — entirely unencrypted, so it round-trips into any password manager. It is
+gated behind an explicit confirmation in the UI, and it should be: it is your whole vault in the clear.
+The project column only means something to the organization that exported it, so import reads it
+only under that exact header and holds back any row whose id matches no project there.
 
 WebCrypto (`crypto.subtle`) is used here rather than the Rust core because this envelope never touches
 a vault key, so there is nothing to keep out of the webview.
@@ -715,11 +721,11 @@ Everything an attacker with full database read access can simply read:
 - `orgs`: `name`, `owner_id`, `org_recovery_salt`
 - `memberships`: `org_id`, `user_id`, `role`, `status`, `invited_by`, `granted_by`, all timestamps
 - `invitations`: `org_id`, `email`, `role`, `expires_at`
-- `creds`: `name`, `url`, **`username`**, `note`
-- `api-keys`: `label`, `url`, `note`
-- `access-keys`: `title`, **`access_key_id`**, `note`
-- `ssh-keys`: `title`, `key_type`, `format`, `comment`, `note`
-- `platform`: `name`, `note`, per-code `is_used` / `used_at`
+- `creds`: `name`, `url`, **`username`**, `note`, `project_id`
+- `api-keys`: `label`, `url`, `note`, `project_id`
+- `access-keys`: `title`, **`access_key_id`**, `note`, `project_id`
+- `ssh-keys`: `title`, `key_type`, `format`, `comment`, `note`, `project_id`
+- `platform`: `name`, `note`, per-code `is_used` / `used_at`, `project_id`
 - `env-files`: `label`, `tag`, `variable_count`, `project_id`, and the `DOTENV_PUBLIC_KEY` header
   inside the blob
 - `audit-log`: everything (it holds no secrets by construction)
