@@ -74,7 +74,12 @@ auditLogSchema.index({ actor_email: 1, created_at: -1 });
 auditLogSchema.index({ user_id: 1, created_at: -1 });
 // Unique by construction: two writers racing for the same position collide, and
 // the loser retries against the new head rather than forking the chain.
-auditLogSchema.index({ chain_id: 1, seq: 1 }, { unique: true });
+// Partial because entries written before v0.3.0 carry no chain position: as
+// nulls they would collide with each other and the index would never build.
+auditLogSchema.index(
+  { chain_id: 1, seq: 1 },
+  { unique: true, partialFilterExpression: { chain_id: { $exists: true } } },
+);
 auditLogSchema.index(
   { created_at: 1 },
   { expireAfterSeconds: config.AUDIT_RETENTION_DAYS * 24 * 60 * 60 },

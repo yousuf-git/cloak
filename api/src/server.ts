@@ -4,6 +4,7 @@ import { createApp } from './app.js';
 import { config } from './config/index.js';
 import { connectDb, disconnectDb } from './lib/db.js';
 import { logger } from './lib/logger.js';
+import { runUpgrades } from './lib/upgrade.js';
 import { SERVER_VERSION } from './lib/version.js';
 import { sealDeployment } from './services/deployment.service.js';
 
@@ -38,6 +39,9 @@ async function main(): Promise<void> {
         message: error.message,
       }),
   });
+  // Before anything reads the data: rows an older server wrote have to match
+  // the models first.
+  await runUpgrades();
   stage = 'deployment';
   // Before the port opens: a server that cannot be claimed should never accept
   // a signup, and a claim racing the seal would have nothing to check against.
