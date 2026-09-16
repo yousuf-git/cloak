@@ -493,6 +493,7 @@ Run from the repository root:
 | `pnpm typecheck` | Type-check every package |
 | `pnpm lint` | Lint every package |
 
+| `pnpm db:wipe` | Drop the whole database for a clean start (asks you to type its name) |
 Desktop-only: `pnpm --filter @cloak/desktop tauri:dev` and `… tauri:build`.
 
 ## <img src="https://api.iconify.design/lucide/flask-conical.svg?color=%236366f1&height=20" align="center" alt="" /> Testing

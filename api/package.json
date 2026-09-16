@@ -10,6 +10,7 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "reset:dev": "tsx scripts/reset-dev-data.ts",
+    "db:wipe": "tsx scripts/wipe-db.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint src",
     "test": "vitest run"
