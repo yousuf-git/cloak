@@ -1,8 +1,12 @@
 name: release
 
-# On-demand only: builds + publishes a GitHub Release when a version tag is
-# pushed (e.g. `git tag v0.2.0 && git push origin v0.2.0`). Ordinary commits to
-# main build nothing. See docs/DISTRIBUTION.md.
+# On-demand only. The desktop app and the server are released separately, each
+# from its own tag, so a change to one never puts out a version of the other:
+#
+#   git tag desktop-v0.4.0 && git push origin desktop-v0.4.0   # installers + update feed
+#   git tag server-v0.3.1  && git push origin server-v0.3.1    # server bundle
+#
+# Ordinary commits to main build nothing. See docs/DISTRIBUTION.md.
 #
 # workflow_dispatch is a dry run of the server bundle alone: it builds and
 # uploads the zip as a workflow artifact, publishing nothing. Use it to check the
@@ -10,7 +14,8 @@ name: release
 on:
   push:
     tags:
-      - 'v*'
+      - 'desktop-v*'
+      - 'server-v*'
   workflow_dispatch:
 
 # Never run two release builds for the same tag at once.
@@ -19,10 +24,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  publish:
-    # Only a tag can be released — tauri-action has no release to attach to
-    # otherwise. A manual run skips straight to the bundle.
-    if: startsWith(github.ref, 'refs/tags/')
+  desktop:
+    if: startsWith(github.ref, 'refs/tags/desktop-v')
     permissions:
       contents: write # create the release + upload assets
     strategy:
@@ -41,6 +44,18 @@ jobs:
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
+
+      # The tag names the version the update feed announces; the installers are
+      # stamped from tauri.conf.json. If they differ, installed apps would be
+      # offered an "update" to the version they already run, forever.
+      - name: Check the tag matches the app version
+        shell: bash
+        run: |
+          app="$(node -p "require('./desktop/src-tauri/tauri.conf.json').version")"
+          if [[ "desktop-v$app" != "$GITHUB_REF_NAME" ]]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match tauri.conf.json version $app"
+            exit 1
+          fi
 
       - name: Install Linux build dependencies
         if: matrix.platform == 'ubuntu-22.04'
@@ -71,31 +86,84 @@ jobs:
       # its own deps, but pnpm resolves the whole workspace at once.
       - run: pnpm install --frozen-lockfile
 
+      # The signing key signs the update bundles, and installed apps accept an
+      # update only if it verifies against the public key in tauri.conf.json.
+      # Losing the key means no installed app can ever be updated again.
       - uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           projectPath: desktop
           tagName: ${{ github.ref_name }}
-          releaseName: Cloak ${{ github.ref_name }}
+          releaseName: Cloak desktop ${{ github.ref_name }}
           releaseDraft: false
           prerelease: false
-          generateReleaseNotes: true
           args: ${{ matrix.args }}
+
+  # Finishes the desktop release once every platform has uploaded: notes that
+  # cover changes since the previous app release (not whichever release came
+  # last), the oldest server the new version works with, and "latest" status.
+  # Installed apps read latest.json from GitHub's latest release, so a server
+  # release must never hold that spot.
+  desktop-feed:
+    needs: desktop
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Write release notes since the previous app release
+        run: |
+          set -euo pipefail
+          previous="$(scripts/previous-release-tag.sh desktop "$TAG")"
+          args=(-f tag_name="$TAG")
+          [[ -n "$previous" ]] && args+=(-f previous_tag_name="$previous")
+          gh api "repos/$GITHUB_REPOSITORY/releases/generate-notes" "${args[@]}" --jq .body > notes.md
+          gh release edit "$TAG" --notes-file notes.md
+
+      - name: Publish the update feed
+        run: |
+          set -euo pipefail
+          gh release download "$TAG" --pattern latest.json --clobber
+          min_server="$(jq -r .min_server_version desktop/src/compat.json)"
+          jq --arg min "$min_server" --rawfile notes notes.md \
+            '.min_server_version = $min | .notes = $notes' latest.json > feed.json
+          mv feed.json latest.json
+          gh release upload "$TAG" latest.json --clobber
+          gh release edit "$TAG" --latest
 
   # The self-hosted backend, shipped as its own asset so an operator can set up
   # a server without cloning the repository or installing pnpm. Runs after the
   # installers so it attaches to a release that already exists.
   server-bundle:
-    needs: publish
-    # `always()` so a manual run reaches this job despite `publish` being
-    # skipped; the second clause still blocks it when a real release build fails.
-    if: always() && (needs.publish.result == 'success' || github.event_name == 'workflow_dispatch')
+    if: startsWith(github.ref, 'refs/tags/server-v') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-22.04
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the previous server tag, for the release notes
+
+      # A server reports SERVER_VERSION to every app that connects, and the apps
+      # compare it with their own bounds, so it has to be the version released.
+      - name: Check the tag matches the server version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          package="$(node -p "require('./api/package.json').version")"
+          reported="$(sed -nE "s/^export const SERVER_VERSION = '([^']+)';/\1/p" api/src/lib/version.ts)"
+          if [[ "server-v$package" != "$GITHUB_REF_NAME" || "$reported" != "$package" ]]; then
+            echo "::error::Tag $GITHUB_REF_NAME, api/package.json $package and SERVER_VERSION $reported must agree"
+            exit 1
+          fi
 
       - uses: actions/setup-node@v4
         with:
@@ -118,8 +186,8 @@ jobs:
         working-directory: api
         run: |
           set -euo pipefail
-          VERSION="${GITHUB_REF_NAME#v}"
-          OUT="cloak-server-${GITHUB_REF_NAME}"
+          VERSION="$(node -p "require('./package.json').version")"
+          OUT="cloak-server-v${VERSION}"
           mkdir -p "../$OUT"
 
           # A lockfile so `npm ci` on the operator's machine resolves exactly
@@ -141,11 +209,18 @@ jobs:
           echo "BUNDLE=$OUT.zip" >> "$GITHUB_ENV"
           echo "Built $OUT.zip for $VERSION"
 
-      - name: Attach to the release
+      # Never marked latest: installed apps take their update feed from the
+      # latest release, and a server release has none.
+      - name: Publish the release
         if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload "${GITHUB_REF_NAME}" "${BUNDLE}" "${BUNDLE}.sha256" --clobber
+        run: |
+          set -euo pipefail
+          previous="$(scripts/previous-release-tag.sh server "$GITHUB_REF_NAME")"
+          args=(--title "Cloak server ${GITHUB_REF_NAME}" --generate-notes --latest=false --verify-tag)
+          [[ -n "$previous" ]] && args+=(--notes-start-tag "$previous")
+          gh release create "$GITHUB_REF_NAME" "$BUNDLE" "$BUNDLE.sha256" "${args[@]}"
 
       # Dry run: keep the zip for inspection instead of publishing it.
       - name: Upload as a build artifact
