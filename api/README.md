@@ -70,6 +70,41 @@ this server never holds anything readable.
 
 ---
 
+## Upgrading
+
+The server is released on its own, as `cloak-server-vX.Y.Z.zip` under a
+`server-v` tag on the [releases page](https://github.com/yousuf-git/cloak/releases).
+Admins also see a notice in the app's organization settings when a newer one
+exists. Nothing updates the server automatically.
+
+1. **Read the release notes.** If they raise the oldest app version the server
+   accepts, have everyone update the desktop app first (Settings → Updates);
+   older apps are refused once the new server is running.
+2. **Back up MongoDB.**
+3. **Replace the files in the directory the server already runs from.** Keep
+   `.env`. With Docker this matters twice over: Compose names the database
+   volume after the directory, so starting from a freshly unzipped folder
+   starts an empty database — an unclaimed server — while the real one sits
+   untouched in the old volume.
+
+   ```bash
+   cd /path/to/your/cloak-server            # the directory with your .env
+   unzip -q /tmp/cloak-server-vX.Y.Z.zip -d /tmp/cloak-upgrade
+   rsync -a --delete --exclude .env --exclude node_modules \
+     /tmp/cloak-upgrade/cloak-server-vX.Y.Z/ ./
+   ```
+
+4. **Restart it.** Database changes a release needs run by themselves on start.
+
+   ```bash
+   docker compose up -d --build                         # with Docker
+   npm ci --omit=dev && pm2 reload ecosystem.config.cjs  # with pm2
+   ```
+
+5. **Check it.** `$PUBLIC_URL/` reports the running version.
+
+---
+
 ## Operating notes
 
 - **Back up MongoDB.** It is the only copy of every wrapped key. Losing it loses

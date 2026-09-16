@@ -75,12 +75,13 @@ Cloak has no service to sign up for. Your team runs the backend, holds the
 database, and keeps the only copies of every key. This section is the whole path
 from an empty server to a working team.
 
-You need two things from the [latest release](https://github.com/yousuf-git/cloak/releases/latest):
+You need two things from the [releases page](https://github.com/yousuf-git/cloak/releases).
+The app and the server are released separately, so take the newest of each:
 
-| Asset | For |
-|---|---|
-| `Cloak_*.AppImage` / `.deb` / `.rpm` / `.msi` / `.dmg` | Everyone, one per person |
-| `cloak-server-v*.zip` | The person running the server, once |
+| Asset | Release | For |
+|---|---|---|
+| `Cloak_*.AppImage` / `.deb` / `.rpm` / `.msi` / `.dmg` | `desktop-v*` | Everyone, one per person |
+| `cloak-server-v*.zip` | `server-v*` | The person running the server, once |
 
 ### 1. Set up the server
 
@@ -187,6 +188,9 @@ sealed to it. On your own hardware that risk is small, but it is not zero.
 
 ### Operating notes
 
+- **Updates.** The desktop app updates itself (Settings → Updates). The server
+  does not: admins see a notice when a new one is out, and upgrade it as
+  described in [`api/README.md`](api/README.md#upgrading).
 - **Back up MongoDB.** It holds the only copy of every wrapped key. Losing it
   loses every vault, and no support path can recover them — that is the design,
   not a gap in it.
