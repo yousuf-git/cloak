@@ -505,6 +505,11 @@ export interface AuditVerificationDto {
 export interface AuditPageDto {
   entries: AuditEntryDto[];
   next_cursor: string | null;
+  /** Present when a numbered page was asked for. */
+  total?: number;
+  page?: number;
+  page_size?: number;
+  page_count?: number;
 }
 
 export interface OrgBootstrapBody {
@@ -600,8 +605,13 @@ export const orgApi = {
       auth: true,
     });
   },
-  exportAudit: (orgId: string) =>
-    apiRequest<string>(`/orgs/${orgId}/audit/export.csv`, { auth: true, raw: true }),
+  exportAudit: (orgId: string, params: Record<string, string> = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return apiRequest<string>(`/orgs/${orgId}/audit/export.csv${query ? `?${query}` : ''}`, {
+      auth: true,
+      raw: true,
+    });
+  },
 
   verifyAudit: (orgId: string) =>
     apiRequest<AuditVerificationDto>(`/orgs/${orgId}/audit/verify`, { auth: true }),
@@ -776,6 +786,7 @@ export const vaultApi = {
       encrypted_dotenvx_key?: string | null;
       content_b64?: string;
       variable_count?: number;
+      project_id?: string;
     },
   ) => apiRequest<EnvFileDto>(`/vault/env-files/${id}`, { method: 'PATCH', body, auth: true, org: true }),
   deleteEnvFile: (id: string) =>
@@ -786,7 +797,6 @@ export type EnvTag = 'Local' | 'Staging' | 'Production' | 'Custom';
 
 export interface EnvFileDto {
   _id: string;
-      project_id?: string;
   project_id: string;
   label: string;
   tag: EnvTag;

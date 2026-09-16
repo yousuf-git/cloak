@@ -237,6 +237,9 @@ function auditFilter(req: Request) {
   const q = req.query as Record<string, unknown>;
   return {
     action: q.action as string | undefined,
+    area: q.area as audit.AuditArea | undefined,
+    q: q.q as string | undefined,
+    page: q.page as number | undefined,
     resource: q.resource as string | undefined,
     outcome: q.outcome as 'success' | 'failure' | undefined,
     userId: q.user_id as string | undefined,
@@ -265,11 +268,13 @@ export const verifyAudit = asyncHandler(async (req: Request, res: Response) => {
 export const exportAudit = asyncHandler(async (req: Request, res: Response) => {
   const { orgId } = orgContext(req, 'audit:read');
   const filter = auditFilter(req);
-  const page = await audit.listAuditLogs(orgId, { ...filter, limit: 5000 });
+  const page = await audit.listAuditLogs(orgId, { ...filter, page: undefined, limit: 5000 });
   await trail(req, 'audit:export', 'AuditLog', undefined, {
     context: {
       rows: page.entries.length,
       action_filter: filter.action,
+      area_filter: filter.area,
+      search: filter.q,
       from: filter.from?.toISOString(),
       to: filter.to?.toISOString(),
     },

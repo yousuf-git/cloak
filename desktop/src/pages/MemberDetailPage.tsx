@@ -14,9 +14,13 @@ import { Badge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { RemoveMemberDialog } from '@/components/RemoveMemberDialog';
+import { AuditTable } from '@/components/AuditTable';
 import { Select } from '@/components/ui/Select';
 import { KeyFingerprint } from '@/components/ui/KeyFingerprint';
-import { useMember, useMemberActivity, useMembers, useFingerprint } from '@/hooks/team';
+import { useAuditLog, useMember, useMembers, useFingerprint } from '@/hooks/team';
+import { AuditFilterBar } from '@/components/AuditFilterBar';
+import { Pagination } from '@/components/ui/Pagination';
+import { isFiltered, PAGE_SIZES } from '@/lib/audit-filters';
 import { useOrg } from '@/hooks/useOrg';
 import { toast } from '@/stores/toast';
 import { formatDateTime, timeAgo } from '@/lib/utils';
@@ -35,15 +39,14 @@ export function MemberDetailPage({ userId, onBack }: { userId: string; onBack: (
     member?.identity_public_key,
   );
 
-  const [cursors, setCursors] = useState<string[]>([]);
-  const activity = useMemberActivity(userId, cursors.at(-1));
+  const activity = useAuditLog({ userId });
 
   const [removing, setRemoving] = useState(false);
   const [promoting, setPromoting] = useState(false);
 
   const canManage = can('member:manage') && member?.role !== 'owner';
   const canTransfer = role === 'owner' && member?.role !== 'owner';
-  const entries = activity.data?.entries ?? [];
+  const entries = activity.entries;
 
   if (isLoading || !member) {
     return (
@@ -168,73 +171,51 @@ export function MemberDetailPage({ userId, onBack }: { userId: string; onBack: (
           title="Activity is admin-only"
           description="Ask an admin if you need this member's audit trail."
         />
-      ) : activity.isLoading ? (
-        <div className="flex flex-1 items-center justify-center">
-          <Loader2 className="h-5 w-5 animate-spin" style={{ color: 'var(--color-fg-muted)' }} />
-        </div>
-      ) : entries.length === 0 ? (
-        <EmptyState
-          icon={ScrollText}
-          title="Nothing recorded yet"
-          description="Anything this member changes in the vault will show up here."
-        />
       ) : (
         <>
-          <div className="min-h-0 overflow-x-auto">
-            {/* No "who" column: every row here is already this one member. */}
-            <table className="w-full text-left text-sm">
-              <thead
-                className="text-[11px] uppercase tracking-wide"
-                style={{ color: 'var(--color-fg-muted)' }}
-              >
-                <tr>
-                  <th className="py-2 pr-4 font-medium">When</th>
-                  <th className="py-2 pr-4 font-medium">Action</th>
-                  <th className="py-2 pr-4 font-medium">Resource</th>
-                  <th className="py-2 font-medium">IP</th>
-                </tr>
-              </thead>
-              <tbody>
-                {entries.map((entry) => (
-                  <tr key={entry.id} className="border-t" style={{ borderColor: 'var(--color-border)' }}>
-                    <td className="whitespace-nowrap py-2 pr-4 tabular-nums" style={{ color: 'var(--color-fg-muted)' }}>
-                      {formatUtc(entry.created_at)}
-                    </td>
-                    <td className="py-2 pr-4">
-                      <code className="text-xs" style={{ fontFamily: 'var(--font-mono)' }}>
-                        {entry.action}
-                      </code>
-                    </td>
-                    <td className="py-2 pr-4" style={{ color: 'var(--color-fg-muted)' }}>
-                      {entry.resource ?? '—'}
-                    </td>
-                    <td className="py-2" style={{ color: 'var(--color-fg-muted)' }}>
-                      {entry.ip ?? '—'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="mb-3">
+            <AuditFilterBar value={activity.filters} onChange={activity.setFilters} />
           </div>
 
-          <div className="mt-4 flex items-center justify-between">
-            <Button
-              size="sm"
-              variant="ghost"
-              disabled={cursors.length === 0}
-              onClick={() => setCursors((c) => c.slice(0, -1))}
-            >
-              Newer
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              disabled={!activity.data?.next_cursor}
-              onClick={() => setCursors((c) => [...c, activity.data!.next_cursor!])}
-            >
-              Older
-            </Button>
-          </div>
+          {activity.isLoading ? (
+            <div className="flex flex-1 items-center justify-center py-10">
+              <Loader2 className="h-5 w-5 animate-spin" style={{ color: 'var(--color-fg-muted)' }} />
+            </div>
+          ) : entries.length === 0 ? (
+            isFiltered(activity.filters) ? (
+              <EmptyState
+                icon={ScrollText}
+                title="No activity matches these filters"
+                description="Widen the time range or clear a filter to see more."
+              />
+            ) : (
+              <EmptyState
+                icon={ScrollText}
+                title="Nothing recorded yet"
+                description="Anything this member changes in the vault will show up here."
+              />
+            )
+          ) : (
+            <div className="min-h-0 overflow-x-auto" style={{ opacity: activity.isFetching ? 0.6 : 1 }}>
+              {/* No "who" column: every row here is already this one member. */}
+              <AuditTable entries={entries} showActor={false} />
+            </div>
+          )}
+
+          {activity.total > 0 && (
+            <div className="mt-4">
+              <Pagination
+                page={activity.page}
+                pageCount={activity.pageCount}
+                pageSize={activity.pageSize}
+                total={activity.total}
+                pageSizes={PAGE_SIZES}
+                onPageChange={activity.setPage}
+                onPageSizeChange={activity.setPageSize}
+                busy={activity.isFetching}
+              />
+            </div>
+          )}
         </>
       )}
 

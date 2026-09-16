@@ -23,8 +23,20 @@ export const validate =
           errors: result.error.flatten().fieldErrors,
         });
       }
-      // req.query/params are read-only getters in Express 5; assign via defineProperty-safe cast.
-      Object.assign(req[key] as object, result.data);
+      if (key === 'query') {
+        // req.query is a getter in Express 5 that re-parses the URL on every
+        // read, so assigning into it is lost and handlers saw raw strings — a
+        // date filter reached the CSV export as text and crashed it. Shadow the
+        // getter with the parsed value instead.
+        Object.defineProperty(req, 'query', {
+          value: result.data,
+          writable: true,
+          configurable: true,
+          enumerable: true,
+        });
+      } else {
+        Object.assign(req[key] as object, result.data);
+      }
     }
     next();
   };

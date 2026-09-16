@@ -133,9 +133,18 @@ were considered and deliberately not built.
 ## Audit
 
 `AuditLog` gains `org_id` and a `{ org_id, created_at: -1 }` compound index that
-backs a keyset-paginated per-org view, plus CSV export. Metadata only, never
-secret plaintext or ciphertext, the same rule the trail already followed. A TTL
-index expires rows after `AUDIT_RETENTION_DAYS` (default 365).
+backs a per-org view, plus CSV export. Metadata only, never secret plaintext or
+ciphertext, the same rule the trail already followed. A TTL index expires rows
+after `AUDIT_RETENTION_DAYS` (default 365).
+
+The view asks for numbered pages (`page`, `limit` of 20, 50 or 100) and gets
+back `total` and `page_count` with them. It narrows by area of the vault
+(`area`), free text over the action, target name and actor email (`q`, matched
+literally, not as a pattern), member, outcome and a time window; the CSV export
+takes the same filters, so it holds exactly what the screen showed. A request
+without `page` still gets the older cursor paging, which is what a desktop
+client from before numbered pages sends. Times are stored and sent in UTC and
+shown in the viewer's own timezone.
 
 An entry has to answer "which one, and what changed" without a second lookup, so
 alongside action, actor, resource id, IP and user agent it carries:

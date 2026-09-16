@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { AUDIT_AREAS } from '../services/audit-query.service.js';
 import { ROLES } from '../models/membership.model.js';
 
 const objectId = z.string().regex(/^[a-f\d]{24}$/i, 'Invalid id');
@@ -52,4 +53,8 @@ export const auditQuerySchema = z.object({
   to: z.coerce.date().optional(),
   cursor: z.string().max(64).optional(),
   limit: z.coerce.number().int().min(1).max(200).default(50),
+  // Numbered pages, for a pager that shows totals. Without it, `cursor` pages.
+  page: z.coerce.number().int().min(1).optional(),
+  area: z.enum(AUDIT_AREAS).optional(),
+  q: z.string().trim().max(100).optional(),
 });

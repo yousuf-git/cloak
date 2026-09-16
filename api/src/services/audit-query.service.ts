@@ -5,8 +5,33 @@ import { User } from '../models/user.model.js';
 
 type Id = Types.ObjectId | string;
 
+/**
+ * The parts of an organization an entry can be about, keyed by the action
+ * prefixes that belong to each. "org" takes the audit trail's own entries too:
+ * exporting the trail is something done to the organization's record.
+ */
+const AREA_PREFIXES = {
+  env: ['env'],
+  cred: ['cred'],
+  apikey: ['apikey'],
+  accesskey: ['accesskey'],
+  sshkey: ['sshkey'],
+  platform: ['platform'],
+  project: ['project'],
+  member: ['member'],
+  org: ['org', 'audit'],
+} as const;
+
+export type AuditArea = keyof typeof AREA_PREFIXES;
+export const AUDIT_AREAS = Object.keys(AREA_PREFIXES) as [AuditArea, ...AuditArea[]];
+
 export interface AuditFilter {
   action?: string;
+  area?: AuditArea;
+  /** Free text, matched against the action, what was acted on, and who did it. */
+  q?: string;
+  /** 1-based. When set, the page is found by position and totals are counted. */
+  page?: number;
   resource?: string;
   outcome?: AuditOutcome;
   userId?: string;
@@ -35,11 +60,30 @@ export interface AuditEntry {
 export interface AuditPage {
   entries: AuditEntry[];
   next_cursor: string | null;
+  /** Present when the request asked for a numbered page. */
+  total?: number;
+  page?: number;
+  page_size?: number;
+  page_count?: number;
+}
+
+function escapeRegex(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function buildFilter(orgId: Id, filter: AuditFilter): Record<string, unknown> {
   const query: Record<string, unknown> = { org_id: orgId };
+  const all: Record<string, unknown>[] = [];
   if (filter.action) query.action = filter.action;
+  if (filter.area) {
+    all.push({ action: { $regex: `^(${AREA_PREFIXES[filter.area].join('|')}):` } });
+  }
+  if (filter.q) {
+    // Escaped: this is a search box, not a pattern language.
+    const text = { $regex: escapeRegex(filter.q), $options: 'i' };
+    all.push({ $or: [{ action: text }, { target_label: text }, { actor_email: text }] });
+  }
+  if (all.length > 0) query.$and = all;
   if (filter.resource) query.resource = filter.resource;
   if (filter.outcome) query.outcome = filter.outcome;
   if (filter.userId) query.user_id = filter.userId;
@@ -49,7 +93,7 @@ function buildFilter(orgId: Id, filter: AuditFilter): Record<string, unknown> {
   const createdAt: Record<string, Date> = {};
   if (filter.from) createdAt.$gte = filter.from;
   if (filter.to) createdAt.$lte = filter.to;
-  if (filter.cursor) {
+  if (filter.cursor && filter.page === undefined) {
     const cursorDate = new Date(filter.cursor);
     if (!Number.isNaN(cursorDate.getTime())) createdAt.$lt = cursorDate;
   }
@@ -67,10 +111,16 @@ export function describeContext(context?: Record<string, unknown>): string {
 }
 
 export async function listAuditLogs(orgId: Id, filter: AuditFilter): Promise<AuditPage> {
-  const rows = await AuditLog.find(buildFilter(orgId, filter))
-    .sort({ created_at: -1 })
-    .limit(filter.limit + 1)
-    .lean();
+  const query = buildFilter(orgId, filter);
+  const skip = filter.page ? (filter.page - 1) * filter.limit : 0;
+  const [rows, total] = await Promise.all([
+    AuditLog.find(query)
+      .sort({ created_at: -1, _id: -1 })
+      .skip(skip)
+      .limit(filter.limit + 1)
+      .lean(),
+    filter.page ? AuditLog.countDocuments(query) : Promise.resolve(undefined),
+  ]);
 
   const page = rows.slice(0, filter.limit);
   // Rows carry the actor's address themselves; the lookup only covers entries
@@ -94,6 +144,14 @@ export async function listAuditLogs(orgId: Id, filter: AuditFilter): Promise<Aud
     })),
     next_cursor:
       rows.length > filter.limit ? (page[page.length - 1]?.created_at.toISOString() ?? null) : null,
+    ...(total === undefined
+      ? {}
+      : {
+          total,
+          page: filter.page,
+          page_size: filter.limit,
+          page_count: Math.ceil(total / filter.limit),
+        }),
   };
 }
 

@@ -1,4 +1,6 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useState } from 'react';
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
+import { auditParams, NO_FILTERS, PAGE_SIZES, type AuditFilters } from '@/lib/audit-filters';
 import { orgApi, type MemberDto, type Role } from '@/lib/api';
 import { crypto } from '@/lib/tauri-crypto';
 import { useOrg } from '@/hooks/useOrg';
@@ -114,15 +116,60 @@ export function useMember(userId?: string) {
   });
 }
 
-/** That member's own audit trail — the "who" column is implied, so it is dropped. */
-export function useMemberActivity(userId?: string, cursor?: string) {
+/**
+ * One page of the audit trail, with the filters and page state that pick it.
+ * Pass `userId` for a single member's activity; the member filter is then fixed
+ * to them.
+ */
+export function useAuditLog({ userId }: { userId?: string } = {}) {
   const sandbox = useAppMode((s) => s.sandbox);
   const { orgId, can } = useOrg();
+  const [filters, setFilters] = useState<AuditFilters>(NO_FILTERS);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number>(PAGE_SIZES[0]);
 
-  return useQuery({
-    queryKey: ['member-activity', orgId, userId, cursor ?? 'first'],
+  const scoped = userId ? { ...filters, userId } : filters;
+  const query = useQuery({
+    queryKey: ['audit', orgId, scoped, page, pageSize],
+    // Date.now() is read here, per request, so "last 24 hours" means the day
+    // before the page was asked for rather than before the filter was picked.
     queryFn: () =>
-      orgApi.listAudit(orgId!, { user_id: userId!, ...(cursor ? { cursor } : {}) }),
-    enabled: !sandbox && Boolean(orgId) && Boolean(userId) && can('audit:read'),
+      orgApi.listAudit(orgId!, {
+        ...auditParams(scoped, Date.now()),
+        page: String(page),
+        limit: String(pageSize),
+      }),
+    enabled: !sandbox && Boolean(orgId) && can('audit:read'),
+    // Keep the current rows on screen while the next page loads, instead of
+    // collapsing the table to a spinner on every click.
+    placeholderData: keepPreviousData,
   });
+
+  const pageCount = query.data?.page_count ?? 0;
+  // A narrower filter, or bigger pages, can leave the current page past the end.
+  useEffect(() => {
+    if (pageCount > 0 && page > pageCount) setPage(pageCount);
+  }, [page, pageCount]);
+
+  return {
+    entries: query.data?.entries ?? [],
+    total: query.data?.total ?? 0,
+    pageCount,
+    isLoading: query.isLoading,
+    isFetching: query.isFetching,
+    filters,
+    setFilters: (next: AuditFilters) => {
+      setFilters(next);
+      setPage(1);
+    },
+    page,
+    setPage,
+    pageSize,
+    setPageSize: (next: number) => {
+      setPageSize(next);
+      setPage(1);
+    },
+    /** The same filters, for an export of what is on screen (every page of it). */
+    exportParams: () => auditParams(scoped, Date.now()),
+  };
 }
