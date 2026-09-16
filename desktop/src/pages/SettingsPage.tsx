@@ -7,7 +7,6 @@ import {
   LogOut,
   Loader2,
   PlayCircle,
-  KeyRound,
   UserRound,
   MonitorSmartphone,
   History,
@@ -81,8 +80,11 @@ export function SettingsPage() {
   };
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-6xl flex-col">
-      <PageHeader title="Settings" description="Manage security, session, and appearance preferences." />
+    // No fixed height: the shell's content pane is the scroll container, so the
+    // page has to be free to grow past the window. Pinning it to h-full made the
+    // sections shrink to fit and clip their own contents instead.
+    <div className="mx-auto flex w-full max-w-7xl flex-col pb-6">
+      <PageHeader title="Settings" description="Your account, how it signs in, and where it is signed in." />
 
       {sandbox && (
         <div
@@ -98,21 +100,34 @@ export function SettingsPage() {
         </div>
       )}
 
-      {/* Two explicit columns, not grid auto-flow: the cards differ in height, so
-          letting the grid place them itself is what left the ragged gaps. The
-          split is chosen to make the two columns land at roughly equal height. */}
-      <div className="grid gap-4 lg:grid-cols-2">
-        <div className="flex flex-col gap-4">
-          <Section icon={UserRound} title="Profile" description="How you appear to your team." delay={0}>
+      {/* Who you are on the left, how the account is protected on the right.
+          Explicit columns rather than grid auto-flow, because the cards differ
+          in height and auto-flow leaves ragged gaps between them. */}
+      <div className="grid items-start gap-4 lg:grid-cols-12">
+        <div className="flex flex-col gap-4 lg:col-span-5">
+          <Section icon={UserRound} title="Account" description="How you appear to your team." delay={0}>
             <NameRow name={name} disabled={sandbox} onSave={setName} />
             <Row label="Email" value={email ?? 'Signed in'}>
               <Badge tone="brand">{sandbox ? 'Sandbox' : 'Signed in'}</Badge>
             </Row>
+            {!sandbox && (
+              <div className="p-4">
+                <KeyFingerprint
+                  value={myFingerprint}
+                  loading={fingerprintLoading}
+                  label="Key fingerprint"
+                  hint="Teammates compare this before granting you access. Read it out over a call or in person — never over email or chat."
+                />
+              </div>
+            )}
           </Section>
 
           <Section icon={Palette} title="Appearance" description="Theme and display." delay={0.08}>
             <Row label="Theme" hint="Matches the desktop window chrome">
-              <div className="flex flex-wrap gap-1">
+              <div
+                className="flex gap-0.5 rounded-[var(--radius-md)] border p-0.5"
+                style={{ borderColor: 'var(--color-border-soft)', backgroundColor: 'var(--color-surface-2)' }}
+              >
                 {(['system', 'light', 'dark'] as const).map((t) => (
                   <Button
                     key={t}
@@ -129,54 +144,38 @@ export function SettingsPage() {
           </Section>
         </div>
 
-        <Section
-          icon={ShieldCheck}
-          title="Security & session"
-          description="Encryption, sign-in, and how long Cloak stays unlocked."
-          delay={0.04}
-        >
-          <Row label="Encryption" hint="XChaCha20-Poly1305 · Argon2id KDF">
-            <Badge tone="green">Active</Badge>
-          </Row>
-          <Row label="Email OTP (2FA)" hint="One-time codes on new sign-ins">
-            {twoFactor === null ? (
-              <Loader2 className="h-4 w-4 animate-spin" style={{ color: 'var(--color-fg-muted)' }} />
-            ) : (
-              <Toggle on={twoFactor} disabled={twoFactorBusy} onChange={toggleTwoFactor} />
-            )}
-          </Row>
-          <Row label="30-day Remember Me" hint="Vault key stored in the OS secure keychain">
-            <Toggle on={remember} disabled={rememberBusy} onChange={toggleRemember} />
-          </Row>
-          <Row label="Log out now" hint="Clear the in-memory keys immediately">
-            <Button size="sm" variant="outline" icon={<LogOut className="h-4 w-4" />} onClick={() => logout()}>
-              Log out
-            </Button>
-          </Row>
-        </Section>
+        <div className="flex flex-col gap-4 lg:col-span-7">
+          <Section
+            icon={ShieldCheck}
+            title="Security"
+            description="Encryption, sign-in, and how long Cloak stays unlocked."
+            delay={0.04}
+          >
+            <Row label="Encryption" hint="XChaCha20-Poly1305 · Argon2id KDF">
+              <Badge tone="green">Active</Badge>
+            </Row>
+            <Row label="Email OTP (2FA)" hint="One-time codes on new sign-ins">
+              {twoFactor === null ? (
+                <Loader2 className="h-4 w-4 animate-spin" style={{ color: 'var(--color-fg-muted)' }} />
+              ) : (
+                <Toggle on={twoFactor} disabled={twoFactorBusy} onChange={toggleTwoFactor} />
+              )}
+            </Row>
+            <Row label="30-day Remember Me" hint="Vault key stored in the OS secure keychain">
+              <Toggle on={remember} disabled={rememberBusy} onChange={toggleRemember} />
+            </Row>
+            <Row label="Log out now" hint="Clear the in-memory keys immediately">
+              <Button size="sm" variant="outline" icon={<LogOut className="h-4 w-4" />} onClick={() => logout()}>
+                Log out
+              </Button>
+            </Row>
+          </Section>
+
+          {!sandbox && <SessionsSection />}
+        </div>
       </div>
 
-      {!sandbox && <SessionsSection />}
-
       {!sandbox && <SecurityLogSection />}
-
-      {!sandbox && (
-        <Section
-          icon={KeyRound}
-          title="Your key fingerprint"
-          description="Verify your device identity before teammates grant access."
-          className="mt-4"
-          delay={0.16}
-        >
-          <div className="p-4">
-            <KeyFingerprint
-              value={myFingerprint}
-              loading={fingerprintLoading}
-              hint="Read these digits back over a call or in person — never over email or chat. If they differ, do not grant access."
-            />
-          </div>
-        </Section>
-      )}
     </div>
   );
 }
@@ -235,8 +234,19 @@ function SessionsSection() {
       icon={MonitorSmartphone}
       title="Where you're signed in"
       description="Every device holding a live session. Sign one out to cut it off now."
-      className="mt-4"
       delay={0.12}
+      action={
+        <Button
+          size="sm"
+          variant="ghost"
+          icon={<LogOut className="h-4 w-4" />}
+          disabled={busy !== null || sessions.length < 2}
+          title="Ends every session except this one"
+          onClick={revokeOthers}
+        >
+          {busy === 'others' ? 'Signing out…' : 'Sign out others'}
+        </Button>
+      }
     >
       {query.isLoading ? (
         <div className="flex items-center gap-2 p-4 text-sm" style={{ color: 'var(--color-fg-muted)' }}>
@@ -259,13 +269,15 @@ function SessionsSection() {
                 {session.current && <Badge tone="green">This device</Badge>}
               </div>
               <p className="mt-1 text-xs" style={{ color: 'var(--color-fg-muted)' }}>
-                {session.ip ?? 'Unknown address'} · last used {timeAgo(session.last_used_at)} · signed
-                in {formatUtc(session.started_at)}
+                {session.ip ?? 'Unknown address'} · last used {timeAgo(session.last_used_at)}
+              </p>
+              <p className="text-xs" style={{ color: 'var(--color-fg-muted)' }}>
+                Signed in {formatDateTime(session.started_at)}
               </p>
             </div>
             <Button
               size="sm"
-              variant="outline"
+              variant={session.current ? 'ghost' : 'outline'}
               disabled={busy !== null}
               onClick={() => revoke(session)}
             >
@@ -274,18 +286,6 @@ function SessionsSection() {
           </div>
         ))
       )}
-
-      <Row label="Sign out everywhere else" hint="Ends every session except this one">
-        <Button
-          size="sm"
-          variant="outline"
-          icon={<LogOut className="h-4 w-4" />}
-          disabled={busy !== null || sessions.length < 2}
-          onClick={revokeOthers}
-        >
-          {busy === 'others' ? 'Signing out…' : 'Sign out others'}
-        </Button>
-      </Row>
     </Section>
   );
 }
@@ -299,6 +299,8 @@ function SessionsSection() {
 function SecurityLogSection() {
   const query = useQuery({ queryKey: ['security-log'], queryFn: () => api.securityLog() });
   const entries = query.data?.entries ?? [];
+  const [expanded, setExpanded] = useState(false);
+  const shown = expanded ? entries : entries.slice(0, ACTIVITY_PREVIEW);
 
   return (
     <Section
@@ -306,7 +308,14 @@ function SecurityLogSection() {
       title="Recent account activity"
       description="Sign-ins, sign-outs and security changes on this account."
       className="mt-4"
-      delay={0.14}
+      delay={0.16}
+      action={
+        entries.length > ACTIVITY_PREVIEW && (
+          <Button size="sm" variant="ghost" onClick={() => setExpanded((v) => !v)}>
+            {expanded ? 'Show recent' : `Show all ${entries.length}`}
+          </Button>
+        )
+      }
     >
       {query.isLoading ? (
         <div className="flex items-center gap-2 p-4 text-sm" style={{ color: 'var(--color-fg-muted)' }}>
@@ -318,18 +327,27 @@ function SecurityLogSection() {
           Nothing recorded yet.
         </p>
       ) : (
-        entries.map((entry) => (
-          <div key={entry.id} className="flex items-center justify-between gap-4 px-4 py-2.5">
+        shown.map((entry) => (
+          <div
+            key={entry.id}
+            className="grid grid-cols-[1fr_auto] items-center gap-x-6 gap-y-0.5 px-4 py-2.5 sm:grid-cols-[1fr_12rem_7rem]"
+          >
             <div className="flex min-w-0 items-center gap-2">
               <span className="truncate text-sm">{describeEvent(entry)}</span>
               {entry.outcome === 'failure' && <Badge tone="red">failed</Badge>}
             </div>
             <span
-              className="shrink-0 text-xs tabular-nums"
+              className="hidden truncate text-xs tabular-nums sm:block"
               style={{ color: 'var(--color-fg-muted)' }}
-              title={formatUtc(entry.created_at)}
             >
-              {entry.ip ?? 'unknown address'} · {timeAgo(entry.created_at)}
+              {entry.ip ?? 'unknown address'}
+            </span>
+            <span
+              className="text-right text-xs tabular-nums"
+              style={{ color: 'var(--color-fg-muted)' }}
+              title={formatDateTime(entry.created_at)}
+            >
+              {timeAgo(entry.created_at)}
             </span>
           </div>
         ))
@@ -337,6 +355,9 @@ function SecurityLogSection() {
     </Section>
   );
 }
+
+/** Newest entries shown before the list is expanded. */
+const ACTIVITY_PREVIEW = 6;
 
 const EVENT_LABELS: Record<string, string> = {
   'auth:signup': 'Account created',
@@ -471,6 +492,7 @@ function Section({
   title,
   description,
   children,
+  action,
   className = '',
   delay = 0,
 }: {
@@ -478,6 +500,8 @@ function Section({
   title: string;
   description: string;
   children: ReactNode;
+  /** A control that acts on the whole section, kept in its header. */
+  action?: ReactNode;
   className?: string;
   delay?: number;
 }) {
@@ -495,12 +519,13 @@ function Section({
         >
           <Icon className="h-4 w-4" style={{ color: 'var(--color-accent)' }} />
         </div>
-        <div>
+        <div className="min-w-0 flex-1">
           <p className="font-display text-sm font-semibold">{title}</p>
           <p className="text-xs" style={{ color: 'var(--color-fg-muted)' }}>
             {description}
           </p>
         </div>
+        {action && <div className="shrink-0">{action}</div>}
       </div>
       <div className="relative z-10 flex flex-col divide-y" style={{ borderColor: 'var(--color-border-soft)' }}>
         {children}
