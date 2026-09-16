@@ -469,7 +469,8 @@ API configuration is validated at boot with Zod (`api/src/config/index.ts`) — 
 | `OTP_TTL_SECONDS` | – | `600` | One-time code lifetime (seconds) |
 | `RATE_LIMIT_WINDOW_MS` | – | `900000` | Rate-limit window (15 min) |
 | `RATE_LIMIT_AUTH_MAX` | – | `10` | Max failed auth attempts per window |
-| `RATE_LIMIT_API_MAX` | – | `100` | Max API requests per window |
+| `RATE_LIMIT_API_MAX` | – | `100` | Max anonymous API requests per IP per window |
+| `RATE_LIMIT_ACCOUNT_MAX` | – | `1000` | Max API requests per signed-in account per window |
 | `RATE_LIMIT_UPLOAD_MAX` | – | `20` | Max uploads per window |
 | `CORS_ORIGIN` | – | `*` | Allowed origin(s), comma-separated |
 | `LOG_LEVEL` | – | `info` | Pino log level |
@@ -492,8 +493,8 @@ Run from the repository root:
 | `pnpm test` | Run all workspace tests |
 | `pnpm typecheck` | Type-check every package |
 | `pnpm lint` | Lint every package |
-
 | `pnpm db:wipe` | Drop the whole database for a clean start (asks you to type its name) |
+
 Desktop-only: `pnpm --filter @cloak/desktop tauri:dev` and `… tauri:build`.
 
 ## <img src="https://api.iconify.design/lucide/flask-conical.svg?color=%236366f1&height=20" align="center" alt="" /> Testing

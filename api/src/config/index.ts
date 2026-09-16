@@ -24,7 +24,10 @@ const envSchema = z.object({
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(15 * 60 * 1000),
   // Failed auth/OTP attempts allowed per window (successful requests don't count).
   RATE_LIMIT_AUTH_MAX: z.coerce.number().int().positive().default(10),
+  // Requests per window from one IP that carries no valid access token.
   RATE_LIMIT_API_MAX: z.coerce.number().int().positive().default(100),
+  // Requests per window from one signed-in account, wherever it connects from.
+  RATE_LIMIT_ACCOUNT_MAX: z.coerce.number().int().positive().default(1000),
   RATE_LIMIT_UPLOAD_MAX: z.coerce.number().int().positive().default(20),
 
   CORS_ORIGIN: z.string().default('*'),

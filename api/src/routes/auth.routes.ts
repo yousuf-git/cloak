@@ -27,7 +27,7 @@ export const authRouter = Router();
 
 // Brute-force protection is applied ONLY to secret-guessing / OTP endpoints, and
 // only failed attempts count (see authLimiter). The rest ride the global
-// apiLimiter (100 / 15 min), so a normal login (prelogin + login) or signup
+// apiLimiter (anonymous, per IP), so a normal login (prelogin + login) or signup
 // onboarding never trips the strict budget.
 authRouter.post('/signup', validate({ body: signupSchema }), auth.signup);
 authRouter.post('/prelogin', validate({ body: preloginSchema }), auth.prelogin);

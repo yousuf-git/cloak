@@ -1,5 +1,7 @@
-import rateLimit from 'express-rate-limit';
+import type { Request } from 'express';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { config } from '../config/index.js';
+import { verifyAccessToken } from '../lib/jwt.js';
 
 const base = {
   windowMs: config.RATE_LIMIT_WINDOW_MS,
@@ -10,8 +12,36 @@ const base = {
   message: { status: 'error', code: 'RATE_LIMITED', message: 'Too many requests, try again later.' },
 };
 
-/** Looser global limiter for authenticated API traffic. */
-export const apiLimiter = rateLimit({ ...base, max: config.RATE_LIMIT_API_MAX });
+/** The account a request is signed in as, if its access token checks out. */
+function signedInAccount(req: Request): string | null {
+  const header = req.headers.authorization;
+  if (!header?.startsWith('Bearer ')) return null;
+  try {
+    return verifyAccessToken(header.slice(7)).sub;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Global limiter. Signed-in traffic is budgeted per account, anonymous traffic
+ * per IP.
+ *
+ * Every desktop screen loads several lists at once, so ordinary browsing runs
+ * to a hundred-odd requests in a window — a per-IP budget sized for anonymous
+ * traffic throttled real use. It also pooled everyone behind one address: every
+ * account on a local backend is 127.0.0.1, and a team behind an office NAT
+ * shares one IP. The token is verified, not just decoded, so a forged `sub`
+ * cannot mint a fresh budget.
+ */
+export const apiLimiter = rateLimit({
+  ...base,
+  max: (req) => (signedInAccount(req) ? config.RATE_LIMIT_ACCOUNT_MAX : config.RATE_LIMIT_API_MAX),
+  keyGenerator: (req) => {
+    const account = signedInAccount(req);
+    return account ? `account:${account}` : `ip:${ipKeyGenerator(req.ip ?? '')}`;
+  },
+});
 
 /**
  * Strict brute-force limiter for secret-guessing endpoints (login, OTP, recovery
