@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { crypto } from '@/lib/tauri-crypto';
 import { useOrgs } from '@/stores/org';
+import { useServers } from '@/stores/server';
 import {
   api,
   ApiError,
@@ -186,6 +187,14 @@ export const useAuth = create<AuthState>((set, get) => ({
           org_recovery_wrappedDEK: payload.org.org_recovery_wrapped_dek_b64,
         },
       });
+      // A signup carrying the claim ticket is the one that took ownership, but
+      // the probed server info still says unowned. Clearing the ticket below
+      // against that stale info would route straight back to the claim step,
+      // where the server now refuses the key — so record the claim first.
+      const { info } = useServers.getState();
+      if (get().claimTicket && info) {
+        useServers.setState({ info: { ...info, ownership_claimed: true } });
+      }
       set({
         status: 'show_recovery_key',
         email,

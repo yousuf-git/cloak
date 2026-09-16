@@ -6,6 +6,7 @@ import { TextField } from '@/components/ui/TextField';
 import { KeyFingerprint } from '@/components/ui/KeyFingerprint';
 import { useMyFingerprint } from '@/hooks/team';
 import { orgApi } from '@/lib/api';
+import { decodeJoinKey } from '@/lib/server';
 import { useOrgs } from '@/stores/org';
 import { toast } from '@/stores/toast';
 
@@ -20,7 +21,7 @@ interface Joined {
 }
 
 /**
- * Redeem an invitation code from an email. Accepting only creates the
+ * Redeem the join key from an invitation. Accepting only creates the
  * membership — the vault stays unreadable until an admin grants the key, so the
  * copy says so plainly rather than implying instant access.
  */
@@ -49,6 +50,14 @@ export function InviteAccept({
     if (initialToken) setToken(initialToken);
   }, [initialToken]);
 
+  // What an invitee has is a join key — the server address and the token packed
+  // together — so that is what gets pasted here. The server only knows the
+  // token; sending the whole key finds no invitation.
+  const inviteToken = (): string => {
+    const input = token.trim();
+    return decodeJoinKey(input)?.token ?? input;
+  };
+
   const reset = () => {
     setToken('');
     setPreview(null);
@@ -61,7 +70,7 @@ export function InviteAccept({
     setBusy(true);
     setError(null);
     try {
-      setPreview(await orgApi.peekInvitation(token.trim()));
+      setPreview(await orgApi.peekInvitation(inviteToken()));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'That invitation code is not valid');
     } finally {
@@ -73,7 +82,7 @@ export function InviteAccept({
     setBusy(true);
     setError(null);
     try {
-      const result = await orgApi.acceptInvitation(token.trim());
+      const result = await orgApi.acceptInvitation(inviteToken());
       await refresh();
       // Hold the dialog open on a waiting state: this is the moment the joiner
       // needs their own fingerprint, because the admin is about to compare it.
@@ -93,7 +102,7 @@ export function InviteAccept({
       open={open}
       onClose={reset}
       title="Join an organization"
-      description="Paste the invitation code from your email."
+      description="Paste the join key from your invitation email."
       footer={
         joined ? (
           <Button onClick={reset}>Done</Button>
@@ -139,7 +148,7 @@ export function InviteAccept({
       ) : (
       <div className="flex flex-col gap-3">
         <TextField
-          label="Invitation code"
+          label="Join key"
           value={token}
           onChange={(e) => {
             setToken(e.target.value);
