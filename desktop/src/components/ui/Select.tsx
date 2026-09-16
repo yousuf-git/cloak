@@ -19,15 +19,21 @@ interface SelectProps {
 }
 
 interface Placement {
-  top: number;
   left: number;
   width: number;
   openUp: boolean;
+  /** Distance from the viewport's top edge, when opening down. */
+  top?: number;
+  /** Distance from the viewport's bottom edge, when opening up. */
+  bottom?: number;
+  maxHeight: number;
 }
 
 const ROW_HEIGHT = 34;
 const MAX_POPUP_HEIGHT = 240;
 const GAP = 4;
+/** Kept clear between the list and the window edge. */
+const EDGE = 8;
 
 /**
  * Fully themed dropdown (not a native <select>) so the popup matches the app's
@@ -58,15 +64,22 @@ export function Select({
     if (!trigger) return;
 
     const wanted = Math.min(options.length * ROW_HEIGHT + 8, MAX_POPUP_HEIGHT);
-    const below = window.innerHeight - trigger.bottom - GAP;
+    const below = window.innerHeight - trigger.bottom - GAP - EDGE;
+    const above = trigger.top - GAP - EDGE;
     // Flip upward only when below genuinely can't hold the list and above is roomier.
-    const openUp = below < wanted && trigger.top - GAP > below;
+    const openUp = below < wanted && above > below;
 
+    // Anchored by `bottom` rather than shifted up with a transform: the enter
+    // animation drives `transform`, and it overwrote the shift, so an upward
+    // list hung down from the trigger and ran off the bottom of the window.
     setPlacement({
       left: trigger.left,
       width: trigger.width,
-      top: openUp ? trigger.top - GAP : trigger.bottom + GAP,
       openUp,
+      ...(openUp
+        ? { bottom: window.innerHeight - trigger.top + GAP }
+        : { top: trigger.bottom + GAP }),
+      maxHeight: Math.min(MAX_POPUP_HEIGHT, openUp ? above : below),
     });
   }, [options.length]);
 
@@ -139,12 +152,13 @@ export function Select({
               exit={{ opacity: 0, y: placement.openUp ? 4 : -4 }}
               transition={{ duration: 0.12 }}
               role="listbox"
-              className="fixed z-[200] max-h-60 overflow-auto rounded-lg border p-1 shadow-lg"
+              className="fixed z-[200] overflow-auto rounded-lg border p-1 shadow-lg"
               style={{
                 top: placement.top,
+                bottom: placement.bottom,
                 left: placement.left,
                 width: placement.width,
-                transform: placement.openUp ? 'translateY(-100%)' : undefined,
+                maxHeight: placement.maxHeight,
                 backgroundColor: 'var(--color-surface)',
                 borderColor: 'var(--color-border)',
                 boxShadow: '0 10px 30px -12px rgba(0,0,0,0.45)',
