@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { SITE } from "@/constants/site";
+import { serverBundle } from "@/lib/github";
 import { DOWNLOAD_HERO } from "@/content/download-content";
 import type { GitHubRelease } from "@/types/github";
 import { DesktopDownloads, ServerDownload } from "./platform-downloads";
@@ -13,6 +14,8 @@ import { VersionPicker, formatReleaseDate } from "./version-picker";
 interface DownloadClientProps {
   releases: readonly GitHubRelease[];
   latestTag: string | null;
+  /** The newest server release, which is released separately from the app. */
+  latestServer: GitHubRelease | null;
 }
 
 const SECTIONS: readonly NavSection[] = [
@@ -22,13 +25,16 @@ const SECTIONS: readonly NavSection[] = [
 ];
 
 /**
- * Everything on the page reads from one selected release, so the installers,
- * the server bundle and every filename in the guide always agree.
+ * The installers and the guide read from one selected app release. The server
+ * bundle comes from that same release when it carries one (releases from before
+ * the app and server were versioned apart), and otherwise from the newest
+ * server release, so the filenames on the page always agree.
  */
-export function DownloadClient({ releases, latestTag }: DownloadClientProps) {
+export function DownloadClient({ releases, latestTag, latestServer }: DownloadClientProps) {
   const [tag, setTag] = useState(latestTag ?? releases[0].tagName);
   const release = releases.find((r) => r.tagName === tag) ?? releases[0];
   const isLatest = release.tagName === latestTag;
+  const server = serverBundle(release).zip ? release : (latestServer ?? release);
 
   return (
     <div className="container-wide lg:grid lg:grid-cols-[9.5rem_1fr] lg:gap-12">
@@ -86,7 +92,7 @@ export function DownloadClient({ releases, latestTag }: DownloadClientProps) {
           </div>
 
           <div className="mx-auto mt-14 max-w-5xl">
-            <ServerDownload release={release} />
+            <ServerDownload release={server} />
           </div>
 
           <p className="mx-auto mt-10 max-w-2xl text-center text-xs leading-relaxed text-[var(--color-fg-subtle)]">
@@ -108,6 +114,7 @@ export function DownloadClient({ releases, latestTag }: DownloadClientProps) {
         <Requirements />
         <SetupGuide
           release={release}
+          serverRelease={server}
           latestTag={latestTag}
           onUseLatest={() => latestTag && setTag(latestTag)}
         />

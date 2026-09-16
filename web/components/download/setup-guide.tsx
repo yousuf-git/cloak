@@ -19,7 +19,12 @@ import {
   START_COMMANDS,
   TLS_COMMAND,
   TLS_NOTE,
+  UPDATE_APP_NOTE,
+  UPDATE_SERVER_NOTE,
+  RESTART_COMMANDS,
+  UPGRADE_NOTE,
   linuxCommands,
+  upgradeCommand,
   unpackCommand,
   type SetupMode,
 } from "@/content/download-content";
@@ -30,13 +35,17 @@ import { Tabs } from "./tabs";
 type Os = "windows" | "macos" | "linux";
 type Runner = keyof typeof START_COMMANDS;
 
+const RUNNER_LABELS: Record<Runner, string> = { docker: "Docker", node: "Node.js", pm2: "pm2" };
+
 interface SetupGuideProps {
   release: GitHubRelease;
+  /** Where the server bundle comes from; not always the app's own release. */
+  serverRelease: GitHubRelease;
   latestTag: string | null;
   onUseLatest: () => void;
 }
 
-export function SetupGuide({ release, latestTag, onUseLatest }: SetupGuideProps) {
+export function SetupGuide({ release, serverRelease, latestTag, onUseLatest }: SetupGuideProps) {
   // Teams first, matching the rest of the site; solo is one click away.
   const [mode, setMode] = useState<SetupMode>("team");
   const detected = usePlatform();
@@ -44,7 +53,7 @@ export function SetupGuide({ release, latestTag, onUseLatest }: SetupGuideProps)
   const os: Os = picked ?? (detected === "unknown" ? "windows" : detected);
   const [runner, setRunner] = useState<Runner>("docker");
 
-  const { zip, checksum } = serverBundle(release);
+  const { zip, checksum } = serverBundle(serverRelease);
   const steps = GUIDE_STEPS.filter((step) => step.modes.includes(mode));
 
   const body: Record<string, React.ReactNode> = {
@@ -78,6 +87,18 @@ export function SetupGuide({ release, latestTag, onUseLatest }: SetupGuideProps)
       </div>
     ),
     claim: <NumberedList items={CLAIM_STEPS[mode]} />,
+    update: (
+      <div className="space-y-5">
+        <Prose>{UPDATE_APP_NOTE}</Prose>
+        <Prose>{UPDATE_SERVER_NOTE}</Prose>
+        <Command
+          code={upgradeCommand(zip?.name ?? "cloak-server-vX.Y.Z.zip")}
+          title="Replace the server files, keeping .env"
+        />
+        <Command code={RESTART_COMMANDS[runner]} title={`Restart with ${RUNNER_LABELS[runner]}`} />
+        <Callout tone="warn">{UPGRADE_NOTE}</Callout>
+      </div>
+    ),
     invite: (
       <div className="grid gap-3 sm:grid-cols-2">
         {INVITE_POINTS.map((point, index) => (

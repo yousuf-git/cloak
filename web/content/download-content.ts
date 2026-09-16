@@ -1,6 +1,6 @@
-// Copy for /download. Sourced from the README's "Deploy for your team" section
-// and the server bundle's own setup.sh — keep the three in step when either
-// changes. Commands are functions of the release so every filename on the page
+// Copy for /download. Sourced from the README's "Deploy for your team" section,
+// the server README's "Upgrading" section and the server bundle's own setup.sh —
+// keep them in step when any of them changes. Commands are functions of the release so every filename on the page
 // matches the version the visitor picked.
 
 export type SetupMode = "solo" | "team";
@@ -50,6 +50,7 @@ export const GUIDE_STEPS: readonly GuideStep[] = [
   { id: "check", title: "Check it", modes: ["solo", "team"] },
   { id: "claim", title: "Take ownership", modes: ["solo", "team"] },
   { id: "invite", title: "Add your team", modes: ["team"] },
+  { id: "update", title: "Keep it current", modes: ["solo", "team"] },
 ];
 
 /** Per-OS first-launch notes. The installers are not code-signed yet. */
@@ -72,7 +73,7 @@ export const INSTALL_NOTES = {
     steps: [
       "AppImage runs anywhere with no install: make it executable and start it.",
       "On Ubuntu 24.04 and later, AppImages need libfuse2t64 (22.04 ships libfuse2 already).",
-      "Prefer your package manager? The .deb and .rpm pull in WebKitGTK and friends for you.",
+      "Prefer your package manager? The .deb and .rpm pull in WebKitGTK and friends for you, and ask for your password when an update installs.",
     ],
   },
 } as const;
@@ -148,11 +149,11 @@ export const TLS_NOTE =
 export const CHECK_POINTS = [
   {
     title: "Status page",
-    body: "Open PUBLIC_URL in a browser for a status page that refreshes itself: is the server up, and does anyone own it yet.",
+    body: "Open PUBLIC_URL in a browser for a status page that refreshes itself: is the server up, which version it runs, and does anyone own it yet.",
   },
   {
     title: "Detailed view",
-    body: "Append ?key=<HEALTH_TOKEN> for the database, record counts, the Resend key (masked), uptime and memory. Owners see the same inside the app.",
+    body: "Append ?key=<HEALTH_TOKEN> for the database, record counts, the Resend key (masked), uptime and memory.",
   },
   {
     title: "For monitoring",
@@ -164,7 +165,7 @@ export const CLAIM_STEPS: Record<SetupMode, readonly string[]> = {
   solo: [
     "Open Cloak. Its first screen asks which server, not for a password — enter http://localhost:4000, or wherever your server runs.",
     "The app checks that it is a Cloak server, that the versions match, and that the database is healthy, and says exactly what to fix if not.",
-    "Enter the ownership key from setup.sh, then sign up: name, email, master password, verification code, recovery keys.",
+    "Enter the ownership key from setup.sh, then sign up: name, email and master password, then your recovery keys, then the verification code.",
     "The key is spent the moment your account exists, and the server closes to everyone else. Remove OWNERSHIP_KEY from .env.",
   ],
   team: [
@@ -193,6 +194,29 @@ export const INVITE_POINTS = [
     body: "Before granting, read the member's key fingerprint back to them on a call. It is the defence against a compromised server swapping in its own key.",
   },
 ] as const;
+
+export const UPDATE_APP_NOTE =
+  "The app updates itself. It checks when it starts and every few hours, and Settings → Updates shows what is new and installs it with one restart. Everyone updates their own copy.";
+
+export const UPDATE_SERVER_NOTE =
+  "The server is released separately and never updates itself. When a newer one is out, owners and admins see a notice in the app's organization settings. Read its release notes first: if they say the apps need a newer version, have everyone update before you upgrade.";
+
+export function upgradeCommand(zipName: string) {
+  const dir = zipName.replace(/\.zip$/i, "");
+  return `cd /path/to/your/cloak-server
+unzip -q ~/Downloads/${zipName} -d /tmp/cloak-upgrade
+rsync -a --delete --exclude .env --exclude node_modules \\
+  /tmp/cloak-upgrade/${dir}/ ./`;
+}
+
+export const RESTART_COMMANDS = {
+  docker: "docker compose up -d --build",
+  node: "npm ci --omit=dev && npm start",
+  pm2: "npm ci --omit=dev && pm2 reload ecosystem.config.cjs",
+} as const;
+
+export const UPGRADE_NOTE =
+  "Upgrade in the directory the server already runs from, not a freshly unzipped one. Docker names the database volume after the directory, so starting from a new folder starts an empty, unclaimed server while your data sits untouched in the old volume. Back up MongoDB first; any database changes run by themselves on start.";
 
 export const REQUIREMENTS = [
   {

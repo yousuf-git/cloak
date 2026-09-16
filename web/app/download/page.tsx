@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { MagneticButton } from "@/components/ui/magnetic-button";
 import { DownloadClient } from "@/components/download/download-client";
 import { SITE } from "@/constants/site";
-import { getReleases, pickLatest } from "@/lib/github";
+import { getReleases, pickLatest, releaseShips } from "@/lib/github";
 
 const TITLE = "Download Cloak - Windows, macOS, Linux, and the self-hosted server";
 const DESCRIPTION =
@@ -24,8 +24,9 @@ export const metadata: Metadata = {
 };
 
 export default async function DownloadPage() {
-  const releases = await getReleases();
-  const latest = pickLatest(releases);
+  const all = await getReleases();
+  const releases = all.filter((release) => releaseShips(release, "desktop"));
+  const latest = pickLatest(all, "desktop");
 
   if (releases.length === 0) {
     return (
@@ -49,7 +50,11 @@ export default async function DownloadPage() {
 
   return (
     <main>
-      <DownloadClient releases={releases} latestTag={latest?.tagName ?? null} />
+      <DownloadClient
+        releases={releases}
+        latestTag={latest?.tagName ?? null}
+        latestServer={pickLatest(all, "server")}
+      />
     </main>
   );
 }

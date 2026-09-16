@@ -80,8 +80,19 @@ function mapRelease(raw: RawRelease): GitHubRelease {
   };
 }
 
-/** How many past releases the download page offers. */
-const RELEASE_HISTORY = 20;
+/** How many past releases are fetched; desktop and server releases share the list. */
+const RELEASE_HISTORY = 40;
+
+export type ReleaseKind = "desktop" | "server";
+
+/**
+ * The desktop app and the server are released on their own tags,
+ * `desktop-vX.Y.Z` and `server-vX.Y.Z`, so a change to one does not put out a
+ * new version of the other. A bare `vX.Y.Z` predates that split and shipped both.
+ */
+export function releaseShips(release: GitHubRelease, kind: ReleaseKind): boolean {
+  return /^v\d/.test(release.tagName) || release.tagName.startsWith(`${kind}-v`);
+}
 
 /**
  * Published releases, newest first. One request serves both the site-wide
@@ -95,12 +106,13 @@ export async function getReleases(): Promise<GitHubRelease[]> {
 }
 
 /**
- * What "latest" means everywhere on the site: the newest release that is not a
- * pre-release — the same rule as GitHub's own /releases/latest — falling back
- * to the newest of any kind when every release is a pre-release.
+ * What "latest" means everywhere on the site: the newest release of that kind
+ * that is not a pre-release, falling back to the newest of that kind when every
+ * one is a pre-release.
  */
-export function pickLatest(releases: GitHubRelease[]): GitHubRelease | null {
-  return releases.find((release) => !release.prerelease) ?? releases[0] ?? null;
+export function pickLatest(releases: GitHubRelease[], kind: ReleaseKind): GitHubRelease | null {
+  const ofKind = releases.filter((release) => releaseShips(release, kind));
+  return ofKind.find((release) => !release.prerelease) ?? ofKind[0] ?? null;
 }
 
 export async function getGitHubData(): Promise<GitHubData> {
@@ -111,7 +123,7 @@ export async function getGitHubData(): Promise<GitHubData> {
 
   return {
     repo: repoRaw ? mapRepo(repoRaw) : null,
-    latestRelease: pickLatest(releases),
+    latestRelease: pickLatest(releases, "desktop"),
     fetchedAt: new Date().toISOString(),
   };
 }
