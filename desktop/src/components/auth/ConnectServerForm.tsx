@@ -19,13 +19,15 @@ import {
   isInsecureUrl,
   normalizeServerUrl,
   probeServer,
+  type ProbeRefusal,
   type ServerInfo,
 } from '@/lib/server';
+import { AppUpdateAction } from '@/components/AppUpdateAction';
 
 type Stage =
   | { kind: 'idle' }
   | { kind: 'checking' }
-  | { kind: 'failed'; title: string; detail: string }
+  | { kind: 'failed'; title: string; detail: string; reason?: ProbeRefusal }
   | { kind: 'insecure'; url: string; host: string }
   | { kind: 'found'; url: string; info: ServerInfo };
 
@@ -74,7 +76,7 @@ export function ConnectServerForm({
     setJoinToken(token);
     const result = await probeServer(normalized.url);
     if (!result.ok) {
-      setStage({ kind: 'failed', title: result.title, detail: result.detail });
+      setStage({ kind: 'failed', title: result.title, detail: result.detail, reason: result.reason });
       return;
     }
     setStage({ kind: 'found', url: normalized.url, info: result.info });
@@ -177,7 +179,13 @@ export function ConnectServerForm({
         )}
       </form>
 
-      {stage.kind === 'failed' && <Problem title={stage.title} detail={stage.detail} />}
+      {stage.kind === 'failed' && (
+        <Problem
+          title={stage.title}
+          detail={stage.detail}
+          action={stage.reason === 'app_outdated' ? <AppUpdateAction /> : undefined}
+        />
+      )}
 
       {stage.kind === 'insecure' && (
         <Problem

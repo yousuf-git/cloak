@@ -23,7 +23,7 @@ export interface FileFilter {
   extensions: string[];
 }
 
-function inTauri(): boolean {
+export function inTauri(): boolean {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 }
 

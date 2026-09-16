@@ -8,6 +8,7 @@ import { OnboardingScreen, needsOnboarding } from './components/auth/OnboardingS
 import { useAuth } from './stores/auth';
 import { useServers } from './stores/server';
 import { useAppMode } from './stores/app-mode';
+import { startUpdateChecks } from './stores/updates';
 
 export function App() {
   const status = useAuth((s) => s.status);
@@ -28,7 +29,12 @@ export function App() {
     const t = setTimeout(() => setMinSplash(false), 1400);
     // Servers first: the saved profile decides which backend every later
     // request goes to, including the one that restores a remembered session.
-    void loadServers().then(() => boot());
+    // Update checks wait for the server list too: it says whether this is a
+    // source build, which updates by rebuilding instead.
+    void loadServers().then(() => {
+      startUpdateChecks();
+      return boot();
+    });
     return () => clearTimeout(t);
   }, [boot, loadServers]);
 

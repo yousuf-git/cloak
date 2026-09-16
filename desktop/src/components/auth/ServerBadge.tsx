@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { AlertTriangle, ChevronRight, Loader2, RotateCw, Server } from 'lucide-react';
 import { hostOf } from '@/lib/api';
+import { AppUpdateAction } from '@/components/AppUpdateAction';
+import type { ProbeResult } from '@/lib/server';
 import { LOCAL_SERVER_URL, useServers, type SidecarStatus } from '@/stores/server';
 
 /**
@@ -19,13 +21,14 @@ export function ServerBadge({ name }: { name?: string }) {
   const activeId = useServers((s) => s.activeId);
   const reachable = useServers((s) => s.reachable);
   const sidecar = useServers((s) => s.sidecar);
+  const probeError = useServers((s) => s.probeError);
   const retry = useServers((s) => s.retry);
   const [retrying, setRetrying] = useState(false);
 
   const active = servers.find((s) => s.id === activeId);
   if (!active) return null;
 
-  const problem = describeProblem(active.url === LOCAL_SERVER_URL ? sidecar : null, reachable);
+  const problem = describeProblem(active.url === LOCAL_SERVER_URL ? sidecar : null, reachable, probeError);
 
   const onRetry = async () => {
     setRetrying(true);
@@ -93,6 +96,11 @@ export function ServerBadge({ name }: { name?: string }) {
                 {problem.detail}
               </p>
             )}
+            {problem.canUpdate && (
+              <div className="mt-2">
+                <AppUpdateAction />
+              </div>
+            )}
           </div>
           {problem.canRetry && (
             <button
@@ -116,6 +124,8 @@ interface Problem {
   title: string;
   detail?: string;
   canRetry: boolean;
+  /** The server refused this app's version, so updating is the fix. */
+  canUpdate?: boolean;
 }
 
 /** Backend messages arrive with and without a closing full stop. */
@@ -131,7 +141,11 @@ const DATABASE_HINT =
  * when the active server is this machine's own backend, whose startup the app
  * can see into; any other server is simply reachable or not.
  */
-function describeProblem(sidecar: SidecarStatus | null, reachable: boolean | null): Problem | null {
+function describeProblem(
+  sidecar: SidecarStatus | null,
+  reachable: boolean | null,
+  probeError: Extract<ProbeResult, { ok: false }> | null,
+): Problem | null {
   if (sidecar?.state === 'starting') {
     const { database, last_error: error } = sidecar;
     if (database) {
@@ -169,6 +183,16 @@ function describeProblem(sidecar: SidecarStatus | null, reachable: boolean | nul
       title: 'The local server didn’t start',
       detail: `${sentence(error.message)}${log}`,
       canRetry: true,
+    };
+  }
+
+  if (reachable === false && probeError?.reason) {
+    return {
+      tone: 'error',
+      title: probeError.title,
+      detail: probeError.detail,
+      canRetry: probeError.reason === 'server_outdated',
+      canUpdate: probeError.reason === 'app_outdated',
     };
   }
 

@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { invoke } from '@tauri-apps/api/core';
 import { setApiBaseUrl } from '@/lib/api';
-import { probeServer, type ServerInfo } from '@/lib/server';
+import { probeServer, type ProbeResult, type ServerInfo } from '@/lib/server';
 
 export interface ServerProfile {
   id: string;
@@ -61,6 +61,8 @@ interface ServerState {
   info: ServerInfo | null;
   /** Null while unknown; true once a probe succeeds, false once one fails. */
   reachable: boolean | null;
+  /** Why the last probe failed, when it failed. */
+  probeError: Extract<ProbeResult, { ok: false }> | null;
   loading: boolean;
   /** This build's own backend, when it has one. Null until first read. */
   sidecar: SidecarStatus | null;
@@ -89,6 +91,7 @@ export const useServers = create<ServerState>((set, get) => ({
   localAvailable: false,
   info: null,
   reachable: null,
+  probeError: null,
   loading: true,
   sidecar: null,
 
@@ -155,24 +158,28 @@ export const useServers = create<ServerState>((set, get) => ({
   activate: async (id) => {
     const config = await invoke<ServerConfig>('servers_activate', { id });
     const active = applyActive(config);
-    set({ servers: config.servers, activeId: active?.id ?? null, info: null, reachable: null });
+    set({ servers: config.servers, activeId: active?.id ?? null, info: null, reachable: null, probeError: null });
     await get().recheck();
   },
 
   forget: async (id) => {
     const config = await invoke<ServerConfig>('servers_forget', { id });
     const active = applyActive(config);
-    set({ servers: config.servers, activeId: active?.id ?? null, info: null, reachable: null });
+    set({ servers: config.servers, activeId: active?.id ?? null, info: null, reachable: null, probeError: null });
     if (active) await get().recheck();
   },
 
   recheck: async () => {
     const { servers, activeId } = get();
     const active = servers.find((s) => s.id === activeId);
-    if (!active) return set({ info: null, reachable: null });
+    if (!active) return set({ info: null, reachable: null, probeError: null });
 
     const result = await probeServer(active.url);
-    set(result.ok ? { info: result.info, reachable: true } : { info: null, reachable: false });
+    set(
+      result.ok
+        ? { info: result.info, reachable: true, probeError: null }
+        : { info: null, reachable: false, probeError: result },
+    );
   },
 
   retry: async () => {

@@ -23,11 +23,16 @@ use sidecar::ApiProcess;
 pub fn run() {
   tauri::Builder::default()
     .plugin(tauri_plugin_dialog::init())
+    .plugin(tauri_plugin_opener::init())
+    .plugin(tauri_plugin_process::init())
     .manage(CryptoSession::default())
     .manage(ApiProcess::default())
     .setup(|app| {
       // Registered in release too: the sidecar only runs there, so its logs
       // would otherwise go nowhere and a failed startup would be silent.
+      #[cfg(desktop)]
+      app.handle().plugin(tauri_plugin_updater::Builder::new().build())?;
+
       app.handle().plugin(
         tauri_plugin_log::Builder::default()
           .level(log::LevelFilter::Info)

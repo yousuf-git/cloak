@@ -47,6 +47,15 @@
     ],
     "android": {
       "debugApplicationIdSuffix": ".debug"
+    },
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEEzNEM1QUQ4N0M5QjYxQkMKUldTOFladDgyRnBNbzlIa1EyRms2MUErTnZIalM3UHFVcmhFN3oxTm00NURQVlhvLzQ3Y3RqUGIK",
+      "endpoints": [
+        "https://github.com/yousuf-git/cloak/releases/latest/download/latest.json"
+      ]
     }
   }
 }

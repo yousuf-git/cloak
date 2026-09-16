@@ -10,6 +10,9 @@ import {
   UserRound,
   MonitorSmartphone,
   History,
+  RefreshCw,
+  Download,
+  AlertTriangle,
 } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/Button';
@@ -24,6 +27,9 @@ import { useTheme } from '@/hooks/useTheme';
 import { useMyFingerprint } from '@/hooks/team';
 import { timeAgo, formatDateTime } from '@/lib/utils';
 import { toast } from '@/stores/toast';
+import { useServers } from '@/stores/server';
+import { updateSupport, useUpdates } from '@/stores/updates';
+import { APP_VERSION, isOlder } from '@/lib/version';
 
 export function SettingsPage() {
   const sandbox = useAppMode((s) => s.sandbox);
@@ -142,6 +148,8 @@ export function SettingsPage() {
               </div>
             </Row>
           </Section>
+
+          <UpdatesSection />
         </div>
 
         <div className="flex flex-col gap-4 lg:col-span-7">
@@ -177,6 +185,144 @@ export function SettingsPage() {
 
       {!sandbox && <SecurityLogSection />}
     </div>
+  );
+}
+
+const NO_SELF_UPDATE: Record<Exclude<ReturnType<typeof updateSupport>, 'supported'>, string> = {
+  preview: 'Updates apply to the installed desktop app, not this browser preview.',
+  development: 'This is a development build, so it does not update itself.',
+  'source-build': 'This copy was built from source with pnpm ship. Pull and run pnpm ship again to update it.',
+};
+
+/** This build's version, and the way to the next one. */
+function UpdatesSection() {
+  const support = updateSupport();
+  const status = useUpdates((s) => s.status);
+  const available = useUpdates((s) => s.available);
+  const progress = useUpdates((s) => s.progress);
+  const error = useUpdates((s) => s.error);
+  const checkedAt = useUpdates((s) => s.checkedAt);
+  const autoCheck = useUpdates((s) => s.autoCheck);
+  const check = useUpdates((s) => s.check);
+  const install = useUpdates((s) => s.install);
+  const setAutoCheck = useUpdates((s) => s.setAutoCheck);
+  const serverVersion = useServers((s) => s.info?.server_version ?? null);
+
+  const supported = support === 'supported';
+  const busy = status === 'checking' || status === 'downloading' || status === 'restarting';
+  const serverTooOld =
+    available?.minServerVersion && serverVersion && isOlder(serverVersion, available.minServerVersion)
+      ? available.minServerVersion
+      : null;
+  const percent = progress.total ? Math.min(100, Math.round((progress.received / progress.total) * 100)) : null;
+
+  return (
+    <Section
+      icon={RefreshCw}
+      title="Updates"
+      description="Keep this app current. Your server is updated separately."
+      delay={0.12}
+      action={
+        supported && (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={busy}
+            icon={<RefreshCw className={`h-3.5 w-3.5 ${status === 'checking' ? 'animate-spin' : ''}`} />}
+            onClick={() => void check()}
+          >
+            Check now
+          </Button>
+        )
+      }
+    >
+      <Row label="Version" value={`Cloak ${APP_VERSION}`}>
+        {status === 'available' ? (
+          <Badge tone="brand">Update available</Badge>
+        ) : status === 'up-to-date' ? (
+          <Badge tone="green">Up to date</Badge>
+        ) : null}
+      </Row>
+
+      {!supported ? (
+        <p className="p-4 text-xs leading-5" style={{ color: 'var(--color-fg-muted)' }}>
+          {NO_SELF_UPDATE[support]}
+        </p>
+      ) : available && (status === 'available' || status === 'downloading' || status === 'restarting' || status === 'failed') ? (
+        <div className="flex flex-col gap-3 p-4">
+          <div>
+            <p className="text-sm font-medium">Cloak {available.version} is ready to install</p>
+            {available.date && (
+              <p className="text-xs" style={{ color: 'var(--color-fg-muted)' }}>
+                Released {formatDateTime(available.date)}
+              </p>
+            )}
+          </div>
+          {available.notes && (
+            <div
+              data-selectable="true"
+              className="max-h-40 overflow-y-auto whitespace-pre-wrap rounded-[var(--radius-md)] border p-3 text-xs leading-5"
+              style={{ borderColor: 'var(--color-border-soft)', backgroundColor: 'var(--color-surface-2)', color: 'var(--color-fg-muted)' }}
+            >
+              {available.notes}
+            </div>
+          )}
+          {serverTooOld && (
+            <p className="flex items-start gap-2 text-xs leading-5" style={{ color: 'var(--color-warning)' }}>
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              Your server runs {serverVersion}, and Cloak {available.version} needs {serverTooOld} or newer. After
+              updating you won&apos;t be able to sign in until whoever runs the server updates it.
+            </p>
+          )}
+          {status === 'downloading' ? (
+            <div className="flex flex-col gap-1.5">
+              <div className="h-1.5 overflow-hidden rounded-full" style={{ backgroundColor: 'var(--color-surface-3)' }}>
+                <div
+                  className="h-full rounded-full transition-[width]"
+                  style={{ width: `${percent ?? 100}%`, backgroundColor: 'var(--color-accent)', opacity: percent === null ? 0.5 : 1 }}
+                />
+              </div>
+              <p className="text-xs" style={{ color: 'var(--color-fg-muted)' }}>
+                Downloading{percent !== null ? ` · ${percent}%` : '…'}
+              </p>
+            </div>
+          ) : status === 'restarting' ? (
+            <p className="flex items-center gap-2 text-xs" style={{ color: 'var(--color-fg-muted)' }}>
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Restarting into the new version…
+            </p>
+          ) : (
+            <div className="flex flex-col items-start gap-2">
+              {status === 'failed' && error && (
+                <p className="text-xs" style={{ color: 'var(--color-danger)' }}>
+                  The update did not install: {error}
+                </p>
+              )}
+              <Button size="sm" icon={<Download className="h-3.5 w-3.5" />} onClick={() => void install()}>
+                Download and restart
+              </Button>
+              <p className="text-[11px]" style={{ color: 'var(--color-fg-muted)' }}>
+                Cloak closes while it installs and opens again on the new version.
+              </p>
+            </div>
+          )}
+        </div>
+      ) : (
+        (status === 'failed' || checkedAt) && (
+          <p className="p-4 text-xs" style={{ color: status === 'failed' ? 'var(--color-danger)' : 'var(--color-fg-muted)' }}>
+            {status === 'failed'
+              ? `Could not check for updates: ${error ?? 'unknown error'}`
+              : `Last checked ${timeAgo(new Date(checkedAt!).toISOString())}`}
+          </p>
+        )
+      )}
+
+      {supported && (
+        <Row label="Check automatically" hint="When Cloak starts, then every few hours">
+          <Toggle on={autoCheck} onChange={() => setAutoCheck(!autoCheck)} />
+        </Row>
+      )}
+    </Section>
   );
 }
 

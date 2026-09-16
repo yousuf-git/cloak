@@ -41,8 +41,7 @@ warm; a GitHub Actions round trip (queue → cold Rust build → download → in
 strictly slower and buys nothing for a single-user, single-machine setup.
 
 **AppImage, not deb.** `dpkg -i` needs sudo on every install. An AppImage is a single
-file dropped into `~/.local/bin` — no root, and it's the format Tauri's updater can
-replace in place if you ever wire one up.
+file dropped into `~/.local/bin` — no root.
 
 ---
 
@@ -228,8 +227,9 @@ Tested against the real installed AppImage on Ubuntu 22.04:
 - **The `shutdown()` stall is unexplained.** A plain `SIGTERM` to the sidecar backend
   may hang the same way `PARENT_EXIT` did. The app's own path is unaffected because
   `sidecar::stop()` uses SIGKILL.
-- **No auto-update.** `pnpm ship` is manual. Wiring `tauri-plugin-updater` +
-  GitHub Releases would work (AppImage is the updatable Linux format) but isn't set up.
+- **No in-app updates here.** Released builds update themselves; a `pnpm ship`
+  build does not, because the release it would update to has no backend of its
+  own. Pull and run `pnpm ship` again.
 - **X11 only, tested.** `StartupWMClass` matching is how X11 binds a window to its
   desktop entry; Wayland uses `app_id` and was not tested.
 - **Single machine.** `CLOAK_API_DIR` is an absolute path baked at build time, so the

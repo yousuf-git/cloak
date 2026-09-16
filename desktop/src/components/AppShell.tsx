@@ -23,6 +23,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/stores/auth';
 import { useAppMode } from '@/stores/app-mode';
+import { useUpdates } from '@/stores/updates';
 import { useSearch } from '@/stores/search';
 import { useOrgs } from '@/stores/org';
 import { useOrg, type Capability } from '@/hooks/useOrg';
@@ -204,6 +205,7 @@ export function AppShell() {
   const { query, setQuery, clear } = useSearch();
   const { can } = useOrg();
   const [redeeming, setRedeeming] = useState(false);
+  const updateReady = useUpdates((s) => s.status === 'available');
 
   // Someone who arrived from a join key has already handed us their invitation
   // token; opening the redeem dialog for them beats asking for it a second time
@@ -310,6 +312,7 @@ export function AppShell() {
               item={{ id: 'settings', label: 'Settings', icon: Settings, placeholder: '' }}
               active={active === 'settings'}
               onClick={() => setActive('settings')}
+              badge={updateReady ? 'Update' : undefined}
             />
           </div>
         </aside>
@@ -369,10 +372,12 @@ function NavButton({
   item,
   active,
   onClick,
+  badge,
 }: {
   item: NavItem;
   active: boolean;
   onClick: () => void;
+  badge?: string;
 }) {
   const Icon = item.icon;
   return (
@@ -393,6 +398,14 @@ function NavButton({
       )}
       <Icon className="relative h-4 w-4" strokeWidth={1.9} />
       <span className="sidebar-nav-label relative">{item.label}</span>
+      {badge && (
+        <span
+          className="relative ml-auto rounded-full px-1.5 py-px text-[10px] font-semibold"
+          style={{ backgroundColor: 'var(--color-accent-soft)', color: 'var(--color-accent)' }}
+        >
+          {badge}
+        </span>
+      )}
     </button>
   );
 }

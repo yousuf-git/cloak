@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Building2, Plus, LifeBuoy, Trash2, Loader2, Clock } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Building2, Plus, LifeBuoy, Trash2, Loader2, Clock, ServerCog, ExternalLink } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -13,6 +13,10 @@ import { useOrgs } from '@/stores/org';
 import { orgApi } from '@/lib/api';
 import { crypto } from '@/lib/tauri-crypto';
 import { toast } from '@/stores/toast';
+import { useServers } from '@/stores/server';
+import { useUpdates } from '@/stores/updates';
+import { isOlder } from '@/lib/version';
+import { openExternal } from '@/lib/open-external';
 
 export function OrgSettingsPage() {
   const { org, orgId, can, isLocked } = useOrg();
@@ -63,6 +67,8 @@ export function OrgSettingsPage() {
       />
 
       <div className="flex max-w-2xl flex-col gap-6">
+        {can('org:manage') && <ServerUpdateNotice />}
+
         {isLocked && (
           <div
             className="rounded-xl border px-4 py-3 text-sm"
@@ -384,5 +390,49 @@ function BreakGlassDialog({
         {error && <p className="text-xs" style={{ color: 'var(--color-danger)' }}>{error}</p>}
       </div>
     </Modal>
+  );
+}
+
+/**
+ * Tells admins when a newer server has been released. Upgrading the server is
+ * theirs to do, so this only says that one exists and where it is; the app
+ * never changes the server itself.
+ */
+function ServerUpdateNotice() {
+  const serverVersion = useServers((s) => s.info?.server_version ?? null);
+  const release = useUpdates((s) => s.serverRelease);
+  const checkServerRelease = useUpdates((s) => s.checkServerRelease);
+
+  useEffect(() => {
+    void checkServerRelease();
+  }, [checkServerRelease]);
+
+  if (!serverVersion || !release || !isOlder(serverVersion, release.version)) return null;
+
+  return (
+    <div
+      className="flex items-start gap-3 rounded-xl border px-4 py-3"
+      style={{
+        borderColor: 'color-mix(in srgb, var(--color-accent) 30%, var(--color-border))',
+        backgroundColor: 'var(--color-accent-soft)',
+      }}
+    >
+      <ServerCog className="mt-0.5 h-4 w-4 shrink-0" style={{ color: 'var(--color-accent)' }} />
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium">Cloak server {release.version} is available</p>
+        <p className="mt-0.5 text-xs leading-5" style={{ color: 'var(--color-fg-muted)' }}>
+          This server runs {serverVersion}. Whoever hosts it upgrades it by replacing the bundle and
+          restarting; the release notes say whether the apps need updating first.
+        </p>
+      </div>
+      <Button
+        size="sm"
+        variant="outline"
+        icon={<ExternalLink className="h-3.5 w-3.5" />}
+        onClick={() => void openExternal(release.url)}
+      >
+        Release notes
+      </Button>
+    </div>
   );
 }

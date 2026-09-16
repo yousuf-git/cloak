@@ -1,4 +1,5 @@
 import { apiRequest } from './api';
+import { APP_VERSION, MIN_SERVER_VERSION, isOlder } from './version';
 
 /** What `GET /server/info` reports. Everything here is unauthenticated. */
 export interface ServerInfo {
@@ -74,9 +75,15 @@ export function isInsecureUrl(url: string): boolean {
   return true;
 }
 
+/**
+ * Why a reachable server was refused, when the fix is a version: the app's own
+ * update in one case, the server administrator's in the other.
+ */
+export type ProbeRefusal = 'app_outdated' | 'server_outdated';
+
 export type ProbeResult =
   | { ok: true; info: ServerInfo }
-  | { ok: false; title: string; detail: string };
+  | { ok: false; title: string; detail: string; reason?: ProbeRefusal };
 
 const PROBE_TIMEOUT_MS = 8000;
 
@@ -135,10 +142,31 @@ export async function probeServer(baseUrl: string): Promise<ProbeResult> {
     const stale = info.api_contract > CLIENT_API_CONTRACT;
     return {
       ok: false,
+      reason: stale ? 'app_outdated' : 'server_outdated',
       title: stale ? 'This app is too old for that server' : 'That server is too old for this app',
       detail: stale
         ? `The server speaks API ${info.api_contract} and this app speaks ${CLIENT_API_CONTRACT}. Update Cloak to version ${info.min_client_version} or newer.`
         : `This app speaks API ${CLIENT_API_CONTRACT} and the server speaks ${info.api_contract}. Ask whoever runs it to update the server.`,
+    };
+  }
+
+  // The contract only moves for breaking changes. These bounds catch the rest:
+  // a server that has stopped serving builds this old, or one that predates
+  // something this build relies on.
+  if (isOlder(APP_VERSION, info.min_client_version)) {
+    return {
+      ok: false,
+      reason: 'app_outdated',
+      title: 'This app is too old for that server',
+      detail: `The server needs Cloak ${info.min_client_version} or newer, and this is ${APP_VERSION}.`,
+    };
+  }
+  if (isOlder(info.server_version, MIN_SERVER_VERSION)) {
+    return {
+      ok: false,
+      reason: 'server_outdated',
+      title: 'That server is too old for this app',
+      detail: `This app needs a server running ${MIN_SERVER_VERSION} or newer, and it runs ${info.server_version}. Ask whoever runs it to update the server.`,
     };
   }
 

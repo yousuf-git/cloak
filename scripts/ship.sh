@@ -20,7 +20,10 @@ echo "==> building backend"
 pnpm --filter @cloak/api build
 
 echo "==> building desktop (AppImage)"
-pnpm --filter @cloak/desktop tauri build --bundles appimage
+# No updater artifacts: they need the release signing key, and this build
+# is updated by rebuilding, not by the in-app updater.
+pnpm --filter @cloak/desktop tauri build --bundles appimage \
+  --config '{"bundle":{"createUpdaterArtifacts":false}}'
 
 APPIMAGE="$(find "$ROOT/desktop/src-tauri/target/release/bundle/appimage" -name '*.AppImage' -printf '%T@ %p\n' \
   | sort -rn | head -1 | cut -d' ' -f2-)"
