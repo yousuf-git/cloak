@@ -28,7 +28,7 @@ import { useOrg } from '@/hooks/useOrg';
 import { useAuth } from '@/stores/auth';
 import { toast } from '@/stores/toast';
 import { ROLE_OPTIONS, roleTone, byRole } from '@/lib/roles';
-import { formatUtcDate } from '@/lib/utils';
+import { formatDate } from '@/lib/utils';
 import { RolePermissionsModal } from '@/components/RolePermissionsModal';
 import { MemberDetailPage } from './MemberDetailPage';
 import type { CreatedInvitationDto, MemberDto, Role } from '@/lib/api';
@@ -176,7 +176,7 @@ export function TeamPage() {
                       <p className="truncate text-sm font-medium">{invitation.email}</p>
                       <p className="text-xs" style={{ color: 'var(--color-fg-muted)' }}>
                         Invited as {invitation.role} · expires{' '}
-                        {formatUtcDate(invitation.expires_at)}
+                        {formatDate(invitation.expires_at)}
                       </p>
                     </div>
                     <Button
@@ -326,7 +326,7 @@ function MemberRow({
           </p>
           <p className="truncate text-xs" style={{ color: 'var(--color-fg-muted)' }}>
             {member.name ? `${member.email} · ` : ''}
-            {member.joined_at ? `Joined ${formatUtcDate(member.joined_at)}` : 'Founding member'}
+            {member.joined_at ? `Joined ${formatDate(member.joined_at)}` : 'Founding member'}
           </p>
         </div>
       </div>

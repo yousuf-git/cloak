@@ -23,7 +23,7 @@ import { useAuth } from '@/stores/auth';
 import { useAppMode } from '@/stores/app-mode';
 import { useTheme } from '@/hooks/useTheme';
 import { useMyFingerprint } from '@/hooks/team';
-import { timeAgo, formatUtc } from '@/lib/utils';
+import { timeAgo, formatDateTime } from '@/lib/utils';
 import { toast } from '@/stores/toast';
 
 export function SettingsPage() {

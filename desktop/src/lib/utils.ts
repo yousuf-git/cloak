@@ -24,43 +24,33 @@ export function timeAgo(iso: string): string {
 }
 
 /**
- * Absolute timestamp. Rendered in UTC so that teammates in different timezones
- * comparing the same record read the same string — but the zone is not labelled,
- * because the app never asks anyone to reason about offsets.
+ * Absolute timestamp in the viewer's own timezone. The server stores and sends
+ * UTC; converting happens only here, at display time.
  *
  * Composed from two locales on purpose: en-GB gives day-first dates but
  * lowercase "pm", en-US gives uppercase "PM" but month-first dates.
  */
-export function formatUtc(iso?: string | null): string {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '—';
-  const date = d.toLocaleDateString('en-GB', {
-    timeZone: 'UTC',
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  });
-  const time = d.toLocaleTimeString('en-US', {
-    timeZone: 'UTC',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true,
-  });
-  return `${date}, ${time}`;
+export function formatDateTime(iso?: string | null): string {
+  const d = parseTimestamp(iso);
+  if (!d) return '—';
+  const time = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+  return `${dayOf(d)}, ${time}`;
 }
 
-/** Date-only variant of {@link formatUtc}, for compact list rows. */
-export function formatUtcDate(iso?: string | null): string {
-  if (!iso) return '—';
+/** Date-only variant of {@link formatDateTime}, for compact list rows. */
+export function formatDate(iso?: string | null): string {
+  const d = parseTimestamp(iso);
+  return d ? dayOf(d) : '—';
+}
+
+function parseTimestamp(iso?: string | null): Date | null {
+  if (!iso) return null;
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '—';
-  return d.toLocaleDateString('en-GB', {
-    timeZone: 'UTC',
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  });
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function dayOf(d: Date): string {
+  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
 /**

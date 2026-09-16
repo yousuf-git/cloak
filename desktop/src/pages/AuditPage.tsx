@@ -262,7 +262,7 @@ function IntegrityBanner({ result }: { result: AuditVerificationDto }) {
       <span>
         This trail has been altered: {reasons[result.broken_at!.reason] ?? 'the chain does not check out'}.
         The first {result.entries_checked} entries are intact; the break is at entry{' '}
-        {result.broken_at!.seq}, written {formatUtc(result.broken_at!.created_at)}. Treat everything
+        {result.broken_at!.seq}, written {formatDateTime(result.broken_at!.created_at)}. Treat everything
         from there on as unverified.
       </span>
     </div>

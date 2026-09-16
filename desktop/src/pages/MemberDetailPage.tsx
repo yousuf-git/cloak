@@ -19,7 +19,7 @@ import { KeyFingerprint } from '@/components/ui/KeyFingerprint';
 import { useMember, useMemberActivity, useMembers, useFingerprint } from '@/hooks/team';
 import { useOrg } from '@/hooks/useOrg';
 import { toast } from '@/stores/toast';
-import { formatUtc, timeAgo } from '@/lib/utils';
+import { formatDateTime, timeAgo } from '@/lib/utils';
 import type { MemberRefDto, Role } from '@/lib/api';
 import { ROLE_OPTIONS, roleTone } from '@/lib/roles';
 
@@ -135,7 +135,7 @@ export function MemberDetailPage({ userId, onBack }: { userId: string; onBack: (
           <Fact label="Invited by" at={member.invited_at}>
             {person(member.invited_by) ?? 'Founding member'}
           </Fact>
-          <Fact label="Joined">{formatUtc(member.joined_at)}</Fact>
+          <Fact label="Joined">{formatDateTime(member.joined_at)}</Fact>
           <Fact label="Access granted by" at={member.granted_at}>
             {person(member.granted_by) ??
               (member.status === 'pending_key'
@@ -299,7 +299,7 @@ function Fact({
       <dd className="mt-1 truncate text-sm">{children}</dd>
       {at && (
         <dd className="mt-0.5 truncate text-xs tabular-nums" style={{ color: 'var(--color-fg-muted)' }}>
-          {formatUtc(at)}
+          {formatDateTime(at)}
         </dd>
       )}
     </div>
