@@ -290,7 +290,7 @@ function Problem({
   tone?: 'error' | 'warn';
   action?: React.ReactNode;
 }) {
-  const color = tone === 'warn' ? 'var(--color-amber-500, #f59e0b)' : 'var(--color-danger, #ef4444)';
+  const color = tone === 'warn' ? 'var(--color-amber-500, #f59e0b)' : 'var(--color-danger)';
   const Icon = tone === 'warn' ? ShieldAlert : AlertTriangle;
 
   return (

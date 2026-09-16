@@ -626,7 +626,7 @@ function ImportCredsModal({
             </label>
 
             {mapping.password === null && (
-              <p className="flex items-center gap-1.5 text-[11px]" style={{ color: '#dc2626' }}>
+              <p className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--color-danger)' }}>
                 <ShieldAlert className="h-3.5 w-3.5" />
                 Map the Password column to import.
               </p>
@@ -661,7 +661,7 @@ function ImportCredsModal({
         )}
 
         {error && (
-          <p className="flex items-center gap-1.5 text-[11px]" style={{ color: '#dc2626' }}>
+          <p className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--color-danger)' }}>
             <ShieldAlert className="h-3.5 w-3.5" />
             {error}
           </p>
@@ -905,7 +905,7 @@ function ExportCredsModal({ items, onClose }: { items: CredDto[]; onClose: () =>
               onChange={(e) => setConfirm(e.target.value)}
             />
             {confirm.length > 0 && passphrase !== confirm && (
-              <p className="text-[11px]" style={{ color: '#dc2626' }}>
+              <p className="text-xs" style={{ color: 'var(--color-danger)' }}>
                 Passphrases don't match.
               </p>
             )}
@@ -916,7 +916,7 @@ function ExportCredsModal({ items, onClose }: { items: CredDto[]; onClose: () =>
         ) : (
           <label
             className="flex items-start gap-2 rounded-lg border p-3 text-xs"
-            style={{ borderColor: '#dc2626', color: 'var(--color-fg)' }}
+            style={{ borderColor: 'var(--color-danger)', color: 'var(--color-fg)' }}
           >
             <input
               type="checkbox"
@@ -932,7 +932,7 @@ function ExportCredsModal({ items, onClose }: { items: CredDto[]; onClose: () =>
         )}
 
         {error && (
-          <p className="flex items-center gap-1.5 text-[11px]" style={{ color: '#dc2626' }}>
+          <p className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--color-danger)' }}>
             <ShieldAlert className="h-3.5 w-3.5" />
             {error}
           </p>

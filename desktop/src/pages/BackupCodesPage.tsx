@@ -149,7 +149,7 @@ function PlatformCard({
             title="Delete platform"
             aria-label="Delete platform"
             className="no-drag flex h-8 w-8 items-center justify-center rounded-md transition-colors hover:bg-black/5 dark:hover:bg-white/5"
-            style={{ color: '#ef4444' }}
+            style={{ color: 'var(--color-danger)' }}
           >
             <Trash2 className="h-3.5 w-3.5" />
           </button>

@@ -161,9 +161,9 @@ function IntegrityBanner({ result }: { result: AuditVerificationDto }) {
     <div
       className="mb-4 flex items-start gap-2 rounded-[var(--radius-lg)] border px-4 py-3 text-xs"
       style={{
-        backgroundColor: 'color-mix(in srgb, #ef4444 10%, transparent)',
-        borderColor: 'color-mix(in srgb, #ef4444 30%, transparent)',
-        color: '#ef4444',
+        backgroundColor: 'color-mix(in srgb, var(--color-danger) 10%, transparent)',
+        borderColor: 'color-mix(in srgb, var(--color-danger) 30%, transparent)',
+        color: 'var(--color-danger)',
       }}
     >
       <ShieldAlert className="h-4 w-4 shrink-0" />

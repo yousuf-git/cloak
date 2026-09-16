@@ -436,7 +436,7 @@ function InviteForm({
           onChange={(v) => setRole(v as Exclude<Role, 'owner'>)}
           options={ROLE_OPTIONS}
         />
-        {error && <p className="text-xs" style={{ color: '#ef4444' }}>{error}</p>}
+        {error && <p className="text-xs" style={{ color: 'var(--color-danger)' }}>{error}</p>}
       </div>
     </Modal>
   );
@@ -500,7 +500,7 @@ function GrantDialog({
           If the digits differ, cancel. Granting would hand this organization&apos;s secrets to
           whoever holds the other key.
         </p>
-        {error && <p className="text-xs" style={{ color: '#ef4444' }}>{error}</p>}
+        {error && <p className="text-xs" style={{ color: 'var(--color-danger)' }}>{error}</p>}
       </div>
     </Modal>
   );

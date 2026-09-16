@@ -186,7 +186,7 @@ export function OrgSettingsPage() {
         {can('org:own') && (
           <section className="flex flex-col gap-3">
             <div>
-              <h2 className="text-sm font-semibold" style={{ color: '#ef4444' }}>
+              <h2 className="text-sm font-semibold" style={{ color: 'var(--color-danger)' }}>
                 Danger zone
               </h2>
               <p className="mt-0.5 text-xs" style={{ color: 'var(--color-fg-muted)' }}>
@@ -312,7 +312,7 @@ function CreateOrgDialog({
           onChange={(e) => setName(e.target.value)}
           placeholder="Acme Engineering"
         />
-        {error && <p className="text-xs" style={{ color: '#ef4444' }}>{error}</p>}
+        {error && <p className="text-xs" style={{ color: 'var(--color-danger)' }}>{error}</p>}
       </div>
     </Modal>
   );
@@ -381,7 +381,7 @@ function BreakGlassDialog({
           onChange={(e) => setKey(e.target.value)}
           placeholder="XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX"
         />
-        {error && <p className="text-xs" style={{ color: '#ef4444' }}>{error}</p>}
+        {error && <p className="text-xs" style={{ color: 'var(--color-danger)' }}>{error}</p>}
       </div>
     </Modal>
   );

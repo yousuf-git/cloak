@@ -69,7 +69,7 @@ export function RowActions({
           title="Delete"
           aria-label="Delete"
           className="no-drag flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-black/5 dark:hover:bg-white/5"
-          style={{ color: '#ef4444' }}
+          style={{ color: 'var(--color-danger)' }}
         >
           <Trash2 className="h-3.5 w-3.5" />
         </button>

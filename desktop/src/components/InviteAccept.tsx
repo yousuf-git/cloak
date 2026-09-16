@@ -174,7 +174,7 @@ export function InviteAccept({
           </div>
         )}
 
-        {error && <p className="text-xs" style={{ color: '#ef4444' }}>{error}</p>}
+        {error && <p className="text-xs" style={{ color: 'var(--color-danger)' }}>{error}</p>}
       </div>
       )}
     </Modal>

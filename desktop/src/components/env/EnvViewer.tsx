@@ -154,7 +154,7 @@ export function EnvViewer({ file, onClose, getRaw, decrypt, saveEdit, remove }: 
           )}
 
           {error && (
-            <p className="mt-2 flex items-center gap-1.5 text-xs" style={{ color: '#dc2626' }}>
+            <p className="mt-2 flex items-center gap-1.5 text-xs" style={{ color: 'var(--color-danger)' }}>
               <ShieldAlert className="h-3.5 w-3.5" /> {error}
             </p>
           )}

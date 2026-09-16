@@ -51,8 +51,8 @@ export function ConfirmDialog({
     >
       <div className="flex items-start gap-3 pb-4">
         {destructive && (
-          <span className="mt-0.5 rounded-lg p-2" style={{ backgroundColor: 'color-mix(in srgb, #dc2626 12%, transparent)' }}>
-            <AlertTriangle className="h-4 w-4" style={{ color: '#dc2626' }} />
+          <span className="mt-0.5 rounded-lg p-2" style={{ backgroundColor: 'color-mix(in srgb, var(--color-danger) 12%, transparent)' }}>
+            <AlertTriangle className="h-4 w-4" style={{ color: 'var(--color-danger)' }} />
           </span>
         )}
         <p className="text-sm" style={{ color: 'var(--color-fg-muted)' }}>

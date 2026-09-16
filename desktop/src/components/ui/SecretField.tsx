@@ -195,7 +195,7 @@ export function SecretField({ value, reveal, cipher, maskLength = 20 }: SecretFi
         style={{
           backgroundColor: 'var(--color-surface-2)',
           color: error
-            ? '#dc2626'
+            ? 'var(--color-danger)'
             : animating || (revealed && plain !== null)
               ? 'var(--color-fg)'
               : 'var(--color-fg-muted)',

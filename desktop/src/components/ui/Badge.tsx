@@ -6,7 +6,7 @@ const tones: Record<Tone, { bg: string; fg: string }> = {
   brand: { bg: 'color-mix(in srgb, var(--color-brand-500) 16%, transparent)', fg: 'var(--color-brand-400)' },
   green: { bg: 'color-mix(in srgb, #22c55e 16%, transparent)', fg: '#22c55e' },
   amber: { bg: 'color-mix(in srgb, #f59e0b 18%, transparent)', fg: '#f59e0b' },
-  red: { bg: 'color-mix(in srgb, #ef4444 16%, transparent)', fg: '#ef4444' },
+  red: { bg: 'color-mix(in srgb, var(--color-danger) 16%, transparent)', fg: 'var(--color-danger)' },
   neutral: { bg: 'var(--color-surface-2)', fg: 'var(--color-fg-muted)' },
 };
 

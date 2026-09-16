@@ -29,7 +29,7 @@ export function Toaster() {
             {t.variant === 'success' ? (
               <CheckCircle2 className="mt-px h-4 w-4 shrink-0" style={{ color: '#16a34a' }} />
             ) : (
-              <AlertTriangle className="mt-px h-4 w-4 shrink-0" style={{ color: '#dc2626' }} />
+              <AlertTriangle className="mt-px h-4 w-4 shrink-0" style={{ color: 'var(--color-danger)' }} />
             )}
             <p className="min-w-0 flex-1 break-all text-xs leading-relaxed" style={{ color: 'var(--color-fg)' }}>
               {t.message}

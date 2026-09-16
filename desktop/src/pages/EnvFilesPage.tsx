@@ -244,7 +244,7 @@ function NewEnvFileModal({
           {validationErrors.length > 0 && (
             <ul className="flex flex-col gap-0.5">
               {validationErrors.slice(0, 4).map((msg) => (
-                <li key={msg} className="flex items-start gap-1.5 text-[11px]" style={{ color: '#dc2626' }}>
+                <li key={msg} className="flex items-start gap-1.5 text-xs" style={{ color: 'var(--color-danger)' }}>
                   <ShieldAlert className="mt-0.5 h-3 w-3 shrink-0" />
                   {msg}
                 </li>
@@ -277,7 +277,7 @@ function NewEnvFileModal({
         )}
 
         {error && (
-          <p className="flex items-center gap-1.5 text-xs" style={{ color: '#dc2626' }}>
+          <p className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--color-danger)' }}>
             <ShieldAlert className="h-3.5 w-3.5" /> {error}
           </p>
         )}
